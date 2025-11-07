@@ -13,8 +13,20 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { User } from '@/lib/types';
 import Link from 'next/link';
+import { useFirebase } from '@/firebase';
+import { useRouter } from 'next/navigation';
 
 export function UserNav({ user }: { user: User & { avatarUrl: string } }) {
+  const { auth } = useFirebase();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    if (auth) {
+      await auth.signOut();
+    }
+    router.push('/login');
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -45,8 +57,8 @@ export function UserNav({ user }: { user: User & { avatarUrl: string } }) {
           <DropdownMenuItem disabled>Settings</DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/login">Log out</Link>
+        <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
+          Log out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
