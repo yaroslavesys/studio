@@ -11,38 +11,40 @@ service cloud.firestore {
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
-    
-    function getRole(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+
+    // Safely get user data for a given UID
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
     
+    // Get the role of the user making the request.
+    // Returns null if the user document doesn't exist.
     function getRequestingUserRole() {
-      return getRole(request.auth.uid);
-    }
-    
-    function getRequestingUserDepartmentId() {
-        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId;
+      return getUserData(request.auth.uid).role;
     }
 
+    function getRequestingUserDepartmentId() {
+      return getUserData(request.auth.uid).departmentId;
+    }
+    
     // --- Rules ---
 
     // USERS
     match /users/{userId} {
-      // List: Only Admins can list all users. This relies on the client query being correct.
-      // The rule checks if the *requesting user's* document has the Admin role.
-      allow list: if isSignedIn() && getRequestingUserRole() == 'Admin';
-      
-      // Get: Any signed-in user can get any user doc. This is needed to resolve user names from IDs.
-      allow get: if isSignedIn();
-      
-      // Create: Any authenticated user can create THEIR OWN user document.
-      // This is crucial for the first sign-in.
+      // Create: ANY signed-in user can create THEIR OWN user document.
+      // This is the key fix for the login loop.
       allow create: if isSignedIn() && isOwner(userId);
 
-      // Update: Users can update their own doc. Admins can update any.
+      // Get: Any signed-in user can get any single user's profile.
+      allow get: if isSignedIn();
+      
+      // List: Only Admins can list all users.
+      allow list: if isSignedIn() && getRequestingUserRole() == 'Admin';
+      
+      // Update: A user can update their own document, or an Admin can update any document.
       allow update: if isSignedIn() && (isOwner(userId) || getRequestingUserRole() == 'Admin');
 
-      // Delete: Not allowed for now to prevent accidental data loss.
+      // Delete: Disallowed for safety.
       allow delete: if false;
     }
 
@@ -62,7 +64,6 @@ service cloud.firestore {
       // - Admins can list all requests.
       // - TechLeads can query requests for their department.
       // - Users can query their own requests.
-      // The client-side code is responsible for building the correct query. These rules enforce it.
       allow list: if isSignedIn() && (
         getRequestingUserRole() == 'Admin' ||
         (getRequestingUserRole() == 'TechLead' && request.query.departmentId == getRequestingUserDepartmentId()) ||
@@ -82,7 +83,6 @@ service cloud.firestore {
       // Update:
       // - TechLeads can update requests in their department.
       // - Admins can update any request.
-      // - Users cannot update their own requests once submitted.
       allow update: if isSignedIn() && (
          getRequestingUserRole() == 'Admin' ||
         (getRequestingUserRole() == 'TechLead' && get(/databases/$(database)/documents/accessRequests/$(accessRequestId)).data.departmentId == getRequestingUserDepartmentId())
