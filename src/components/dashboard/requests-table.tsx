@@ -17,16 +17,10 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import type { AccessRequest, RequestStatus, User } from '@/lib/types';
 import { updateRequest } from '@/lib/actions';
 import { useTransition } from 'react';
-import { CheckCircle, XCircle, MoreVertical } from 'lucide-react';
+import { CheckCircle, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { SafeDate } from '@/components/safe-date';

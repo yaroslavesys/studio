@@ -17,10 +17,9 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import type { AccessRequest, RequestStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { CheckCircle, Info, XCircle } from 'lucide-react';
+import { CheckCircle, Info } from 'lucide-react';
 import { useTransition, useState } from 'react';
 import { updateRequest } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
@@ -32,7 +31,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter
 } from '@/components/ui/dialog';
 
 const statusStyles: Record<RequestStatus, string> = {
@@ -46,15 +44,15 @@ type RequestWithDetails = AccessRequest & { userName: string; departmentName: st
 export function AllRequestsManagement({ requests }: { requests: RequestWithDetails[] }) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
-  const [techLeadComment, setTechLeadComment] = useState('');
 
   const handleAdminAction = (id: string, status: RequestStatus) => {
     startTransition(async () => {
       await updateRequest(id, status);
-      // In a real app, this would trigger a notification to the user
       toast({ title: `Request ${status}`, description: 'The user has been notified.' });
     });
   };
+
+  const requestsForAdmin = requests.filter(r => r.status === 'Approved' || r.status === 'Rejected');
 
   return (
     <Card>
@@ -75,7 +73,7 @@ export function AllRequestsManagement({ requests }: { requests: RequestWithDetai
             </TableRow>
           </TableHeader>
           <TableBody>
-            {requests.map(request => (
+            {requestsForAdmin.map(request => (
               <TableRow key={request.id}>
                 <TableCell className="font-medium">
                     <div>{request.userName}</div>
@@ -132,7 +130,7 @@ export function AllRequestsManagement({ requests }: { requests: RequestWithDetai
                             Rejected by Tech Lead
                          </div>
                     )}
-                    {request.status === 'Pending' && (
+                     {request.status === 'Pending' && (
                          <div className="flex justify-end text-muted-foreground text-xs italic">
                             Awaiting Tech Lead
                          </div>
@@ -140,9 +138,9 @@ export function AllRequestsManagement({ requests }: { requests: RequestWithDetai
                 </TableCell>
               </TableRow>
             ))}
-             {requests.length === 0 && (
+             {requestsForAdmin.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">No requests pending review.</TableCell>
+                    <TableCell colSpan={6} className="h-24 text-center">No requests pending final review.</TableCell>
                 </TableRow>
             )}
           </TableBody>
