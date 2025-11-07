@@ -16,44 +16,70 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
-  const { auth, user, isUserLoading } = useFirebase();
+  const { auth, user } = useFirebase();
   const router = useRouter();
   const [isSigningIn, setIsSigningIn] = useState(true); // Start as true to handle initial redirect check
   const { toast } = useToast();
 
-  // This effect runs ONLY ONCE on page load to check if this is a redirect from Google sign-in.
+  // This effect runs ONLY ONCE on page load.
+  // 1. It helps developers authorize their domain in Firebase Console.
+  // 2. It handles the result after returning from Google's sign-in page.
   useEffect(() => {
-    if (auth) {
-      getRedirectResult(auth)
-        .then((result) => {
-          // If result is not null, it means the user just signed in.
-          if (result && result.user) {
-            // Redirect to dashboard immediately after successful sign-in.
-            router.push('/dashboard');
-          } else {
-            // If result is null, it means this is a normal page load, not a redirect.
-            // We can stop the loading indicator.
-            setIsSigningIn(false);
-          }
-        })
-        .catch((error) => {
-          console.error('Error getting redirect result:', error);
-          toast({
-            variant: 'destructive',
-            title: 'Sign-in Failed',
-            description: 'Could not complete sign-in. Please try again.',
-          });
-          setIsSigningIn(false);
-        });
+    if (!auth) {
+      setIsSigningIn(false);
+      return;
+    };
+
+    // --- Helper for developers to authorize their domain ---
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const currentHostname = window.location.hostname;
+        // This is a common point of failure for developers, so we'll log a helpful message.
+        console.log(
+          `%c[Firebase Auth]%c Make sure this domain is authorized in the Firebase Console: %c${currentHostname}`,
+          'color: #FFCA28; font-weight: bold;',
+          'color: inherit;',
+          'color: #1E88E5; font-weight: bold;'
+        );
+         console.log(
+          `%c[Firebase Auth]%c Or go to: %chttps://console.firebase.google.com/project/${auth.app.options.projectId}/authentication/providers`,
+          'color: #FFCA28; font-weight: bold;',
+          'color: inherit;',
+          'color: #1E88E5; font-weight: bold; text-decoration: underline;'
+        );
+      } catch (e) {
+        // This might fail in non-browser environments, but it's safe to ignore.
+      }
     }
+    // --- End of helper ---
+
+    getRedirectResult(auth)
+      .then((result) => {
+        // If result is not null, it means the user just signed in successfully.
+        if (result && result.user) {
+          // Redirect to dashboard immediately after successful sign-in.
+          router.push('/dashboard');
+        } else {
+          // If result is null, it means this is a normal page load, not a redirect.
+          // We can stop the loading indicator.
+          setIsSigningIn(false);
+        }
+      })
+      .catch((error) => {
+        console.error('Error getting redirect result:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Sign-in Failed',
+          description: 'Could not complete sign-in. Please try again.',
+        });
+        setIsSigningIn(false);
+      });
   }, [auth, router, toast]);
 
   // This function handles the button click. It will always initiate the sign-in process.
   const handleSignIn = async () => {
     if (!auth) return;
     
-    // If the user is already authenticated, a redirect will quickly resolve and bring them back.
-    // This simplifies the logic to a single action.
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({
@@ -62,6 +88,7 @@ export default function LoginPage() {
 
     try {
       // This will redirect the user to the Google sign-in page.
+      // After they sign in, the useEffect hook above will handle the result.
       await signInWithRedirect(auth, provider);
     } catch (error) {
       console.error('Error starting sign-in redirect: ', error);
@@ -73,9 +100,6 @@ export default function LoginPage() {
       setIsSigningIn(false);
     } 
   };
-  
-  // The page is loading if we are checking for a redirect result OR if the initial user state is still loading.
-  const isLoading = isSigningIn || isUserLoading;
 
   return (
     <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
@@ -96,9 +120,9 @@ export default function LoginPage() {
             onClick={handleSignIn}
             className="w-full transform transition-transform duration-150 hover:scale-105"
             size="lg"
-            disabled={isLoading}
+            disabled={isSigningIn}
           >
-            {isLoading ? 'Signing In...' : 'Sign In with Google'}
+            {isSigningIn ? 'Signing In...' : 'Sign In with Google'}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             Restricted to users within approved domains.
