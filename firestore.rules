@@ -20,10 +20,10 @@ service cloud.firestore {
       return getUserRole(userId) in roles;
     }
 
-    // Admins can list all users.
-    // Users can only read their own profile.
     match /users/{userId} {
+      // Admins can list all users.
       allow list: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
+      // Users can only read their own profile, Admins can read any.
       allow get: if isSignedIn() && (isOwner(userId) || isUserInRole(request.auth.uid, ['Admin']));
       // New users can create their own profile. Admin can update any profile. Owner can update their own.
       allow write: if isSignedIn() && ((request.method == 'create' && isOwner(userId)) || isUserInRole(request.auth.uid, ['Admin']) || (isOwner(userId) && request.method != 'create'));
@@ -32,7 +32,7 @@ service cloud.firestore {
     // Departments are public for authenticated users. Only Admins can modify them.
     match /departments/{departmentId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && isUserInrolE(request.auth.uid, ['Admin']);
+      allow write: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
     }
 
     // Access Requests
@@ -40,12 +40,15 @@ service cloud.firestore {
       // Create: Any authenticated user can create a request for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
-      // Read: Users can read their own requests. TechLeads can read requests for their department. Admins can read all.
-      allow read: if isSignedIn() && 
+      // Get: Users can read their own requests. TechLeads can read requests for their department. Admins can read all.
+      allow get: if isSignedIn() && 
                     (resource.data.userId == request.auth.uid || 
                      isUserInRole(request.auth.uid, ['Admin']) ||
                      (isUserInRole(request.auth.uid, ['TechLead']) && resource.data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId));
 
+      // List: Only Admins can list all requests. Other roles get filtered lists on the client.
+      allow list: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
+      
       // Update: 
       // - Owners can't update.
       // - TechLeads can update status for their department's requests.
