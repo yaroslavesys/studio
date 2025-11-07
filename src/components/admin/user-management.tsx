@@ -88,7 +88,7 @@ export function UserManagement({ users, departments }: UserManagementProps) {
                    <Select
                       defaultValue={user.role}
                       onValueChange={(value) => handleRoleChange(user.id, value as UserRole)}
-                      disabled={isPending}
+                      disabled={isPending || user.email === 'yaroslav_system.admin@trafficdevils.net'}
                     >
                       <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Select role" />

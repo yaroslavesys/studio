@@ -47,18 +47,20 @@ export function AllRequestsManagement({ requests }: { requests: RequestWithDetai
 
   const handleAdminAction = (id: string, status: RequestStatus) => {
     startTransition(async () => {
+      // In a real app, this might be a different action, e.g., grantAccess()
+      // For this demo, we'll just re-approve it to signify completion.
       await updateRequest(id, status);
-      toast({ title: `Request ${status}`, description: 'The user has been notified.' });
+      toast({ title: `Access Granted`, description: 'The user has been notified.' });
     });
   };
 
-  const requestsForAdmin = requests.filter(r => r.status === 'Approved' || r.status === 'Rejected');
+  const requestsForAdmin = requests.filter(r => r.status === 'Approved');
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>All Access Requests</CardTitle>
-        <CardDescription>Review and finalize all access requests that have been actioned by Tech Leads.</CardDescription>
+        <CardTitle>Approved Access Requests</CardTitle>
+        <CardDescription>Finalize access for requests that have been approved by Tech Leads.</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
@@ -124,16 +126,6 @@ export function AllRequestsManagement({ requests }: { requests: RequestWithDetai
                               Grant Access
                             </Button>
                         </div>
-                    )}
-                     {request.status === 'Rejected' && (
-                         <div className="flex justify-end text-muted-foreground text-xs italic">
-                            Rejected by Tech Lead
-                         </div>
-                    )}
-                     {request.status === 'Pending' && (
-                         <div className="flex justify-end text-muted-foreground text-xs italic">
-                            Awaiting Tech Lead
-                         </div>
                     )}
                 </TableCell>
               </TableRow>

@@ -11,7 +11,6 @@ import { useEffect } from 'react';
 
 export default function AdminPage() {
   const router = useRouter();
-  // Get all data from the context provided by the layout
   const { appUser, allUsers, allDepartments, allRequests, isDashboardLoading } = useDashboard();
 
   useEffect(() => {
@@ -24,7 +23,6 @@ export default function AdminPage() {
     return <div className="flex min-h-screen items-center justify-center"><p>Loading or redirecting...</p></div>;
   }
 
-  // Enrich requests with user and department names for display
   const requestsWithDetails = allRequests.map(request => {
     const requestingUser = allUsers.find(u => u.id === request.userId);
     const department = allDepartments.find(d => d.id === request.departmentId);
