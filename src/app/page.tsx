@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { useFirebase } from '@/firebase';
-import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -23,10 +23,47 @@ export default function LoginPage() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const { toast } = useToast();
 
+  // Effect to handle the result of the redirect
+  useEffect(() => {
+    if (!auth || isSigningIn) return;
+
+    const processRedirectResult = async () => {
+        setIsSigningIn(true);
+        try {
+            const result = await getRedirectResult(auth);
+            if (result && result.user) {
+                const emailDomain = result.user.email?.split('@')[1];
+                if (emailDomain && ALLOWED_DOMAINS.includes(emailDomain)) {
+                    router.push('/dashboard');
+                } else {
+                    await auth.signOut();
+                    toast({
+                        variant: 'destructive',
+                        title: 'Access Denied',
+                        description: 'Your email domain is not authorized for access.',
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error handling redirect result: ', error);
+            toast({
+                variant: 'destructive',
+                title: 'Sign-in Failed',
+                description: 'An error occurred during the sign-in process.',
+            });
+        } finally {
+            setIsSigningIn(false);
+        }
+    };
+
+    processRedirectResult();
+  }, [auth, router, toast, isSigningIn]);
+
+
   const handleSignIn = async () => {
     if (!auth) return;
 
-    // If user is already logged in, just go to the dashboard.
+    // If user is already logged in from a previous session, just go to the dashboard.
     if (user) {
         router.push('/dashboard');
         return;
@@ -35,14 +72,16 @@ export default function LoginPage() {
     // If user is not logged in, start the sign-in process.
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
+    // Add custom parameters to ensure the user always has to select an account.
+    provider.setCustomParameters({
+      prompt: 'select_account',
+    });
     try {
-      // Using signInWithRedirect for a more robust sign-in flow
       await signInWithRedirect(auth, provider);
-      // The page will redirect to Google, and then back to this page.
-      // The onAuthStateChanged listener in FirebaseProvider will handle the user
-      // session and redirect to the dashboard if successful.
+      // The page will redirect to Google, and then back.
+      // The useEffect hook will handle the result.
     } catch (error) {
-      console.error('Error signing in with Google: ', error);
+      console.error('Error starting sign-in redirect: ', error);
        toast({
         variant: "destructive",
         title: "Sign-in Failed",
@@ -52,25 +91,6 @@ export default function LoginPage() {
     } 
   };
   
-    // Effect to handle redirection after successful sign-in
-  useEffect(() => {
-    if (!isUserLoading && user) {
-        const emailDomain = user.email?.split('@')[1];
-        if (emailDomain && ALLOWED_DOMAINS.includes(emailDomain)) {
-            router.push('/dashboard');
-        } else {
-            // This case handles if a user signs in with an unallowed domain
-            // after a redirect flow.
-            auth?.signOut();
-            toast({
-                variant: "destructive",
-                title: "Access Denied",
-                description: "Your email domain is not authorized for access.",
-            });
-        }
-    }
-  }, [user, isUserLoading, router, auth, toast]);
-
   const isLoading = isUserLoading || isSigningIn;
 
   return (
