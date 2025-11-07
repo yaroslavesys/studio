@@ -18,21 +18,24 @@ export default function DashboardPage({ appUser, allUsers, allDepartments }: Das
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadRequests = async () => {
-      setIsLoading(true);
-      const allRequests = await getAccessRequests();
-      setRequests(allRequests);
-      setIsLoading(false);
-    };
-    loadRequests();
-  }, []);
-
+    if (appUser) {
+        const loadRequests = async () => {
+          setIsLoading(true);
+          const allRequests = await getAccessRequests();
+          setRequests(allRequests);
+          setIsLoading(false);
+        };
+        loadRequests();
+    }
+  }, [appUser]);
+  
   const userDepartment = useMemo(() => {
+    if (!allDepartments || !appUser) return null;
     return allDepartments.find(d => d.id === appUser.departmentId) || null;
   }, [appUser, allDepartments]);
 
   const requestsForView = useMemo((): AccessRequest[] => {
-    if (!appUser) return [];
+    if (!appUser || !requests) return [];
     
     switch (appUser.role) {
       case 'User':
@@ -48,6 +51,7 @@ export default function DashboardPage({ appUser, allUsers, allDepartments }: Das
   }, [requests, appUser]);
 
   const requestsWithUserNames = useMemo(() => {
+    if (!requestsForView || !allUsers) return [];
     return requestsForView.map(request => {
       const requestingUser = allUsers.find(u => u.id === request.userId);
       return {
@@ -57,7 +61,7 @@ export default function DashboardPage({ appUser, allUsers, allDepartments }: Das
     });
   }, [requestsForView, allUsers]);
 
-  if (isLoading || !appUser) {
+  if (isLoading || !appUser || !allUsers || !allDepartments) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
