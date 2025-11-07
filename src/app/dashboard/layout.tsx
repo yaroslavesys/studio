@@ -160,7 +160,7 @@ export default function DashboardLayout({
   // Handle auth state redirects
   useEffect(() => {
     if (!isUserLoading && !firebaseUser) {
-      router.push('/login');
+      router.push('/');
     }
   }, [firebaseUser, isUserLoading, router]);
 
