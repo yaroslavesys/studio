@@ -11,11 +11,11 @@ import {
   SidebarTrigger,
   SidebarFooter,
 } from '@/components/ui/sidebar';
-import { getCurrentUser, getUsers } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { UserNav } from '@/components/auth/user-nav';
 import { LayoutDashboard, Shield, Users } from 'lucide-react';
 import { Logo } from '@/components/logo';
-import { getDepartments } from '@/lib/data';
+import { getDepartments, getUsers } from '@/lib/data';
 
 export default async function DashboardLayout({
   children,
