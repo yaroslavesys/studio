@@ -1,25 +1,45 @@
-import { getCurrentUser } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserManagement } from '@/components/admin/user-management';
 import { DepartmentManagement } from '@/components/admin/department-management';
 import { AllRequestsManagement } from '@/components/admin/all-requests-management';
-import { getUsers, getDepartments, getAccessRequests } from '@/lib/data';
+import { getAccessRequests } from '@/lib/data';
 import { ShieldCheck } from 'lucide-react';
+import type { User, Department, AccessRequest } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 
-export default async function AdminPage() {
-  const user = await getCurrentUser();
-  if (user.role !== 'Admin') {
-    redirect('/dashboard');
+interface AdminPageProps {
+  appUser: User;
+  allUsers: (User & { avatarUrl: string })[];
+  allDepartments: Department[];
+}
+
+export default function AdminPage({ appUser, allUsers, allDepartments }: AdminPageProps) {
+  const router = useRouter();
+  const [requests, setRequests] = useState<AccessRequest[]>([]);
+
+   useEffect(() => {
+    if (!appUser || appUser.role !== 'Admin') {
+      router.push('/dashboard');
+      return;
+    }
+    const fetchRequests = async () => {
+      const reqs = await getAccessRequests();
+      setRequests(reqs);
+    }
+    fetchRequests();
+  }, [appUser, router]);
+
+
+  if (!appUser || appUser.role !== 'Admin') {
+    return <div className="flex min-h-screen items-center justify-center"><p>Redirecting...</p></div>;
   }
 
-  const users = await getUsers();
-  const departments = await getDepartments();
-  const requests = await getAccessRequests();
-
   const requestsWithDetails = requests.map(request => {
-    const requestingUser = users.find(u => u.id === request.userId);
-    const department = departments.find(d => d.id === request.departmentId);
+    const requestingUser = allUsers.find(u => u.id === request.userId);
+    const department = allDepartments.find(d => d.id === request.departmentId);
     return {
       ...request,
       userName: requestingUser?.name || 'Unknown User',
@@ -47,10 +67,10 @@ export default async function AdminPage() {
           <TabsTrigger value="requests">All Requests</TabsTrigger>
         </TabsList>
         <TabsContent value="users">
-          <UserManagement users={users} departments={departments} />
+          <UserManagement users={allUsers} departments={allDepartments} />
         </TabsContent>
         <TabsContent value="departments">
-          <DepartmentManagement departments={departments} />
+          <DepartmentManagement departments={allDepartments} />
         </TabsContent>
         <TabsContent value="requests">
             <AllRequestsManagement requests={requestsWithDetails} />
