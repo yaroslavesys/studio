@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { collection } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 interface DashboardContextProps {
@@ -61,14 +61,43 @@ export default function DashboardLayout({
   const [impersonatedRole, setImpersonatedRole] = useState<UserRole | null>(null);
   const [isDataLoading, setIsDataLoading] = useState(true);
 
-  // --- Real-time data from Firestore ---
-  const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  const { data: usersFromDb, isLoading: usersLoading } = useCollection<Omit<User, 'avatarUrl'>>(usersQuery);
-  
+  // --- App User Derivation ---
+  const appUser = useMemo(() => {
+    if (!realAppUser) return null;
+    if (impersonatedRole) {
+      return { ...realAppUser, role: impersonatedRole };
+    }
+    return realAppUser;
+  }, [realAppUser, impersonatedRole]);
+
+  // --- Firestore Queries (now role-dependent) ---
   const departmentsQuery = useMemoFirebase(() => firestore ? collection(firestore, 'departments') : null, [firestore]);
   const { data: allDepartments, isLoading: deptsLoading } = useCollection<Department>(departmentsQuery);
 
-  const requestsQuery = useMemoFirebase(() => firestore ? collection(firestore, 'accessRequests') : null, [firestore]);
+  const usersQuery = useMemoFirebase(() => {
+    if (!firestore || !appUser) return null;
+    switch (appUser.role) {
+      case 'Admin':
+        return collection(firestore, 'users');
+      case 'TechLead':
+         return query(collection(firestore, 'users'), where('departmentId', '==', appUser.departmentId));
+      default: // User
+        return query(collection(firestore, 'users'), where('id', '==', appUser.id));
+    }
+  }, [firestore, appUser]);
+  const { data: usersFromDb, isLoading: usersLoading } = useCollection<Omit<User, 'avatarUrl'>>(usersQuery);
+  
+  const requestsQuery = useMemoFirebase(() => {
+     if (!firestore || !appUser) return null;
+      switch (appUser.role) {
+      case 'Admin':
+        return collection(firestore, 'accessRequests');
+      case 'TechLead':
+        return query(collection(firestore, 'accessRequests'), where('departmentId', '==', appUser.departmentId));
+      default: // User
+        return query(collection(firestore, 'accessRequests'), where('userId', '==', appUser.id));
+    }
+  }, [firestore, appUser]);
   const { data: allRequests, isLoading: requestsLoading } = useCollection<AccessRequest>(requestsQuery);
   
   const allUsers = useMemo(() => {
@@ -83,7 +112,7 @@ export default function DashboardLayout({
   useEffect(() => {
     const authAndDataCheck = async () => {
       if (isUserLoading || !firestore) {
-        return; // Wait for Firebase Auth and Firestore to be ready
+        return; 
       }
 
       if (!firebaseUser) {
@@ -91,20 +120,15 @@ export default function DashboardLayout({
         return;
       }
       
-      // On first load, ensure DB has some demo data
       await checkAndSeedDatabase(firestore);
 
       setIsDataLoading(true);
       
-      // Find or create a user profile in Firestore
       const userProfile = await createUserProfile(firestore, firebaseUser);
       if (userProfile) {
         setRealAppUser(userProfile);
       } else {
-        // This case should ideally not happen if createUserProfile is robust
         console.error("Could not get or create user profile. Redirecting.");
-        // await auth.signOut(); // Optional: sign out if profile fails
-        // router.push('/login');
       }
     };
     
@@ -113,20 +137,13 @@ export default function DashboardLayout({
   }, [firebaseUser, isUserLoading, router, firestore]);
 
   useEffect(() => {
-     // Combined loading state
-      if (!usersLoading && !deptsLoading && !requestsLoading && realAppUser) {
+      // The dashboard is ready when auth is done, we have a user profile,
+      // and the initial queries for that user's role have completed.
+      if (!isUserLoading && appUser && !usersLoading && !deptsLoading && !requestsLoading) {
         setIsDataLoading(false);
       }
-  }, [usersLoading, deptsLoading, requestsLoading, realAppUser]);
+  }, [isUserLoading, appUser, usersLoading, deptsLoading, requestsLoading]);
   
-  const appUser = useMemo(() => {
-    if (!realAppUser) return null;
-    if (impersonatedRole) {
-      return { ...realAppUser, role: impersonatedRole };
-    }
-    return realAppUser;
-  }, [realAppUser, impersonatedRole]);
-
   const userDepartment = useMemo(() => {
     if (!appUser || !allDepartments || allDepartments.length === 0) return null;
     return allDepartments.find(d => d.id === appUser.departmentId);

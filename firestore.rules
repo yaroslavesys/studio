@@ -3,7 +3,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // --- Helper Functions ---
     function isSignedIn() {
       return request.auth != null;
     }
@@ -12,57 +12,63 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
 
-    function isRole(role) {
-      return isSignedIn() && getUserData().role == role;
-    }
-    
-    function isTechLeadOfDepartment(departmentId) {
-        return isRole('TechLead') && getUserData().departmentId == departmentId;
-    }
+    // --- Rules ---
 
+    // USERS
     match /users/{userId} {
-      // Admins can list all users.
-      allow list: if isRole('Admin');
-      // Users can only read their own profile, Admins can read any.
-      allow get: if isSignedIn() && (isOwner(userId) || isRole('Admin'));
-      // New users can create their own profile. Admin can update any profile. Owner can update their own.
-      allow write: if isSignedIn() && ((request.method == 'create' && isOwner(userId)) || isRole('Admin') || (isOwner(userId) && request.method != 'create'));
+      // List: Only Admins can list all users.
+      allow list: if isSignedIn() && getUserData(request.auth.uid).role == 'Admin';
+      
+      // Get: Users can get their own doc. Admins can get any.
+      allow get: if isSignedIn() && (isOwner(userId) || getUserData(request.auth.uid).role == 'Admin');
+      
+      // Create: Any authenticated user can create THEIR OWN user document.
+      allow create: if isSignedIn() && isOwner(userId);
+
+      // Update: Users can update their own doc. Admins can update any.
+      allow update: if isSignedIn() && (isOwner(userId) || getUserData(request.auth.uid).role == 'Admin');
+
+      // Delete: Not allowed for now.
+      allow delete: if false;
     }
 
-    // Departments are public for authenticated users. Only Admins can modify them.
+    // DEPARTMENTS
+    // Any signed-in user can read departments. Only Admins can write.
     match /departments/{departmentId} {
       allow read: if isSignedIn();
-      allow write: if isRole('Admin');
+      allow write: if isSignedIn() && getUserData(request.auth.uid).role == 'Admin';
     }
 
-    // Access Requests
+    // ACCESS REQUESTS
     match /accessRequests/{accessRequestId} {
-      // Create: Any authenticated user can create a request for themselves.
+      // Create: Users can create requests for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
-      // Get: Users can read their own requests. TechLeads can read requests for their department. Admins can read all.
-      allow get: if isSignedIn() && 
-                    (resource.data.userId == request.auth.uid || 
-                     isRole('Admin') ||
-                     isTechLeadOfDepartment(resource.data.departmentId));
+      // Read (Get & List):
+      // - Admins can read all requests.
+      // - TechLeads can read requests for their department.
+      // - Users can read their own requests.
+      allow read: if isSignedIn() && (
+        getUserData(request.auth.uid).role == 'Admin' ||
+        (getUserData(request.auth.uid).role == 'TechLead' && getUserData(request.auth.uid).departmentId == resource.data.departmentId) ||
+        resource.data.userId == request.auth.uid
+      );
 
-      // List: Only Admins can list all requests. TechLeads and Users cannot.
-      allow list: if isRole('Admin');
-      
-      // Update: 
-      // - Owners can't update.
-      // - TechLeads can update status for their department's requests.
+      // Update:
+      // - TechLeads can update requests in their department.
       // - Admins can update any request.
-      allow update: if isSignedIn() && 
-                      (isRole('Admin') ||
-                      isTechLeadOfDepartment(request.resource.data.departmentId));
+      // - Users cannot update their own requests once submitted.
+      allow update: if isSignedIn() && (
+        getUserData(request.auth.uid).role == 'Admin' ||
+        (getUserData(request.auth.uid).role == 'TechLead' && getUserData(request.auth.uid).departmentId == request.resource.data.departmentId)
+      );
                       
-      // Delete: Only admins can delete requests.
-      allow delete: if isRole('Admin');
+      // Delete: Only admins can delete.
+      allow delete: if isSignedIn() && getUserData(request.auth.uid).role == 'Admin';
     }
   }
 }
