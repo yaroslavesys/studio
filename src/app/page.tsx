@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { useFirebase } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -26,11 +26,13 @@ export default function LoginPage() {
   const handleSignIn = async () => {
     if (!auth) return;
 
+    // If user is already logged in, just go to the dashboard.
     if (user) {
         router.push('/dashboard');
         return;
     }
 
+    // If user is not logged in, start the sign-in process.
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
     try {
@@ -47,6 +49,7 @@ export default function LoginPage() {
          setIsSigningIn(false);
          return;
       }
+      // On successful sign-in, redirect to the dashboard
       router.push('/dashboard');
     } catch (error) {
       console.error('Error signing in with Google: ', error);
@@ -55,7 +58,8 @@ export default function LoginPage() {
         title: "Sign-in Failed",
         description: "An error occurred during the sign-in process.",
       });
-      setIsSigningIn(false);
+    } finally {
+        setIsSigningIn(false);
     }
   };
 
@@ -82,7 +86,7 @@ export default function LoginPage() {
             size="lg"
             disabled={isLoading}
           >
-            {isLoading ? 'Signing In...' : (user ? 'Go to Dashboard' : 'Sign In with Google')}
+            {isLoading ? 'Signing In...' : 'Sign In with Google'}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             Restricted to users within approved domains.
