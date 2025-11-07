@@ -179,7 +179,6 @@ export const addAccessRequest = (
       requestResourceData: newRequest
     });
     errorEmitter.emit('permission-error', contextualError);
-    console.error("Error adding document: ", error);
   });
 };
 
@@ -201,7 +200,6 @@ export const updateRequestStatus = (db: Firestore, id: string, status: RequestSt
       requestResourceData: updateData
     });
     errorEmitter.emit('permission-error', contextualError);
-    console.error("Error updating document: ", error);
   });
 };
 
@@ -213,7 +211,6 @@ export const deleteRequestById = (db: Firestore, id: string) => {
       operation: 'delete'
     });
     errorEmitter.emit('permission-error', contextualError);
-    console.error("Error deleting document: ", error);
   });
 };
 
@@ -227,7 +224,6 @@ export const updateUserRoleInDb = (db: Firestore, id: string, role: UserRole) =>
       requestResourceData: { role }
     });
     errorEmitter.emit('permission-error', contextualError);
-    console.error("Error updating user role: ", error);
   });
 };
 
@@ -261,7 +257,6 @@ export const createUserProfile = async (db: Firestore, user: import('firebase/au
                 requestResourceData: newUser
             });
             errorEmitter.emit('permission-error', contextualError);
-            console.error("Error creating user profile: ", error);
         });
         
         const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
