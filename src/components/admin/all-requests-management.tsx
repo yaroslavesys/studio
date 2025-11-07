@@ -47,42 +47,43 @@ export function AllRequestsManagement({ requests }: { requests: RequestWithDetai
 
   const handleAdminAction = (id: string, status: RequestStatus) => {
     startTransition(async () => {
-      // In a real app, this might be a different action, e.g., grantAccess()
-      // For this demo, we'll just re-approve it to signify completion.
       await updateRequest(id, status);
       toast({ title: `Access Granted`, description: 'The user has been notified.' });
     });
   };
-
+  
+  // Corrected Logic: Admin should see requests approved by TechLeads to grant final access.
   const requestsForAdmin = requests.filter(r => r.status === 'Approved');
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Approved Access Requests</CardTitle>
-        <CardDescription>Finalize access for requests that have been approved by Tech Leads.</CardDescription>
+        <CardTitle>Requests for Final Approval</CardTitle>
+        <CardDescription>Grant access for requests that have been approved by Tech Leads.</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>User</TableHead>
+              <TableHead>Department</TableHead>
               <TableHead>Request</TableHead>
-              <TableHead>Justification</TableHead>
-              <TableHead>Date</TableHead>
+              <TableHead>Details</TableHead>
+              <TableHead>Approved On</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {requestsForAdmin.map(request => (
+            {requestsForAdmin.length > 0 ? requestsForAdmin.map(request => (
               <TableRow key={request.id}>
                 <TableCell className="font-medium">
                     <div>{request.userName}</div>
-                    <div className="text-xs text-muted-foreground">{request.departmentName}</div>
+                    <div className="text-xs text-muted-foreground">{request.userEmail}</div>
                 </TableCell>
+                <TableCell>{request.departmentName}</TableCell>
                 <TableCell>{request.title}</TableCell>
-                <TableCell className="max-w-[300px]">
+                <TableCell>
                     <Dialog>
                         <DialogTrigger asChild>
                             <Button variant="outline" size="sm"><Info className="mr-2 h-4 w-4"/> View Details</Button>
@@ -107,32 +108,27 @@ export function AllRequestsManagement({ requests }: { requests: RequestWithDetai
                         </DialogContent>
                     </Dialog>
                 </TableCell>
-                <TableCell><SafeDate dateString={request.createdAt}/></TableCell>
+                <TableCell><SafeDate dateString={request.updatedAt}/></TableCell>
                 <TableCell>
                   <Badge variant="outline" className={cn('font-semibold', statusStyles[request.status])}>
-                    {request.status}
+                    Approved by Lead
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                    {request.status === 'Approved' && (
-                        <div className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                              onClick={() => handleAdminAction(request.id, 'Approved')}
-                              disabled={isPending}
-                            >
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Grant Access
-                            </Button>
-                        </div>
-                    )}
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => handleAdminAction(request.id, 'Approved')} // This might need a new "Granted" status later
+                      disabled={isPending}
+                    >
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Grant Access
+                    </Button>
                 </TableCell>
               </TableRow>
-            ))}
-             {requestsForAdmin.length === 0 && (
+            )) : (
                 <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">No requests pending final review.</TableCell>
+                    <TableCell colSpan={7} className="h-24 text-center">No requests pending final review.</TableCell>
                 </TableRow>
             )}
           </TableBody>
