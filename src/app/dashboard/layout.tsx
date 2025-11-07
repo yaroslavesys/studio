@@ -16,10 +16,10 @@ import {
 import { UserNav } from '@/components/auth/user-nav';
 import { LayoutDashboard, Shield, Eye } from 'lucide-react';
 import { Logo } from '@/components/logo';
-import { useFirebase } from '@/firebase';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import type { User, Department, AccessRequest, UserRole } from '@/lib/types';
-import { getDepartments, getUsers, getAccessRequests } from '@/lib/data';
+import { createUserProfile, checkAndSeedDatabase } from '@/lib/data';
 import {
   Select,
   SelectContent,
@@ -28,8 +28,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { collection } from 'firebase/firestore';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
-// 1. Create a context to hold all our dashboard data
 interface DashboardContextProps {
   appUser: (User & { avatarUrl: string }) | null;
   allUsers: (User & { avatarUrl: string })[];
@@ -40,7 +41,6 @@ interface DashboardContextProps {
 
 const DashboardContext = createContext<DashboardContextProps | null>(null);
 
-// Custom hook to use the context
 export const useDashboard = () => {
   const context = useContext(DashboardContext);
   if (!context) {
@@ -54,69 +54,71 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user: firebaseUser, isUserLoading } = useFirebase();
+  const { firestore, user: firebaseUser, isUserLoading } = useFirebase();
   const router = useRouter();
   
   const [realAppUser, setRealAppUser] = useState<(User & { avatarUrl: string }) | null>(null);
   const [impersonatedRole, setImpersonatedRole] = useState<UserRole | null>(null);
-  
-  const [allUsers, setAllUsers] = useState<(User & { avatarUrl: string })[]>([]);
-  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
-  const [allRequests, setAllRequests] = useState<AccessRequest[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
 
+  // --- Real-time data from Firestore ---
+  const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const { data: usersFromDb, isLoading: usersLoading } = useCollection<Omit<User, 'avatarUrl'>>(usersQuery);
+  
+  const departmentsQuery = useMemoFirebase(() => firestore ? collection(firestore, 'departments') : null, [firestore]);
+  const { data: allDepartments, isLoading: deptsLoading } = useCollection<Department>(departmentsQuery);
+
+  const requestsQuery = useMemoFirebase(() => firestore ? collection(firestore, 'accessRequests') : null, [firestore]);
+  const { data: allRequests, isLoading: requestsLoading } = useCollection<AccessRequest>(requestsQuery);
+  
+  const allUsers = useMemo(() => {
+    if (!usersFromDb) return [];
+    const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
+    return usersFromDb.map(user => ({
+      ...user,
+      avatarUrl: imageMap.get(user.avatarId) || '',
+    }));
+  }, [usersFromDb]);
+
   useEffect(() => {
-    const checkAuthAndFetchData = async () => {
+    const authAndDataCheck = async () => {
       if (isUserLoading) {
-        return; 
+        return; // Wait for Firebase Auth to resolve
       }
 
       if (!firebaseUser) {
         router.push('/login');
         return;
       }
+      
+      // On first load, ensure DB has some demo data
+      await checkAndSeedDatabase();
 
       setIsDataLoading(true);
-
-      const [usersFromDb, departmentsFromDb, requestsFromDb] = await Promise.all([
-        getUsers(),
-        getDepartments(),
-        getAccessRequests()
-      ]);
       
-      setAllUsers(usersFromDb);
-      setAllDepartments(departmentsFromDb);
-      setAllRequests(requestsFromDb);
-
-      let currentUser = usersFromDb.find(u => u.email.toLowerCase() === firebaseUser.email?.toLowerCase());
-
-      if (currentUser) {
-        setRealAppUser(currentUser);
+      // Find or create a user profile in Firestore
+      const userProfile = await createUserProfile(firebaseUser);
+      if (userProfile) {
+        setRealAppUser(userProfile);
       } else {
-        // This logic creates a new user object for users signing in for the first time.
-        const newUser: User & { avatarUrl: string } = {
-            id: firebaseUser.uid,
-            name: firebaseUser.displayName || 'New User',
-            email: firebaseUser.email!,
-            avatarId: `avatar${(usersFromDb.length % 5) + 1}`,
-            // Assign 'Admin' role based on email, otherwise 'User'
-            role: firebaseUser.email === 'yaroslav_system.admin@trafficdevils.net' ? 'Admin' : 'User',
-            // Assign to the first department by default, or empty if none exist
-            departmentId: departmentsFromDb.length > 0 ? departmentsFromDb[0].id : '', 
-            avatarUrl: 'https://images.unsplash.com/photo-1599566147214-ce487862ea4f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBhdmF0YXJ8ZW58MHx8fHwxNzYyNDE5MjYzfDA&ixlib=rb-4.1.0&q=80&w=1080'
-        };
-        console.log("New user created (locally for demo):", newUser);
-        setRealAppUser(newUser);
-        // Do not add the new user to `allUsers` here, it will be handled by re-fetch logic
+        // This case should ideally not happen if createUserProfile is robust
+        console.error("Could not get or create user profile. Redirecting.");
+        // await auth.signOut(); // Optional: sign out if profile fails
+        // router.push('/login');
       }
-      setIsDataLoading(false);
     };
+    
+    authAndDataCheck();
 
-    checkAuthAndFetchData();
   }, [firebaseUser, isUserLoading, router]);
+
+  useEffect(() => {
+     // Combined loading state
+      if (!usersLoading && !deptsLoading && !requestsLoading && realAppUser) {
+        setIsDataLoading(false);
+      }
+  }, [usersLoading, deptsLoading, requestsLoading, realAppUser]);
   
-  // This is the user object that will be passed to the rest of the app.
-  // If impersonation is active, we return a modified user object.
   const appUser = useMemo(() => {
     if (!realAppUser) return null;
     if (impersonatedRole) {
@@ -125,9 +127,8 @@ export default function DashboardLayout({
     return realAppUser;
   }, [realAppUser, impersonatedRole]);
 
-
   const userDepartment = useMemo(() => {
-    if (!appUser || allDepartments.length === 0) return null;
+    if (!appUser || !allDepartments || allDepartments.length === 0) return null;
     return allDepartments.find(d => d.id === appUser.departmentId);
   }, [appUser, allDepartments]);
 
@@ -135,16 +136,16 @@ export default function DashboardLayout({
   
   const contextValue: DashboardContextProps = {
       appUser,
-      allUsers,
-      allDepartments,
-      allRequests,
+      allUsers: allUsers || [],
+      allDepartments: allDepartments || [],
+      allRequests: allRequests || [],
       isDashboardLoading: isLoading
   };
 
   if (isLoading || !appUser) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p>Loading user data...</p>
+        <p>Loading application data...</p>
       </div>
     );
   }

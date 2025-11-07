@@ -1,151 +1,288 @@
+'use client';
+
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+  getDocs,
+  writeBatch,
+  getDoc,
+  query
+} from 'firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { useFirestore } from '@/firebase/provider';
 import type { User, Department, AccessRequest, RequestStatus, RequestType, UserRole } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
-// In a real application, this data would be stored in a database.
-// For this demo, we use in-memory arrays.
-
-let departments: Department[] = [
+// --- Data Seeding (for demo purposes) ---
+// This part is to ensure the database has some initial data.
+let departmentsSeed: Department[] = [
   { id: 'dept-1', name: 'Engineering' },
   { id: 'dept-2', name: 'Marketing' },
   { id: 'dept-3', name: 'Human Resources' },
 ];
 
-let users: User[] = [
-  {
-    id: 'user-1', // This should be replaced by a real Admin UID from firebase
-    name: 'Yaroslav Admin',
-    email: 'yaroslav_system.admin@trafficdevils.net',
-    avatarId: 'avatar1',
-    role: 'Admin',
-    departmentId: 'dept-1',
-  },
-  {
-    id: 'user-2',
-    name: 'Maria Garcia',
-    email: 'maria.g@trafficdevils.net',
-    avatarId: 'avatar2',
-    role: 'TechLead',
-    departmentId: 'dept-1',
-  },
-  {
-    id: 'user-3',
-    name: 'Sam Williams',
-    email: 'sam.w@trafficdevils.net',
-    avatarId: 'avatar3',
-    role: 'User',
-    departmentId: 'dept-1',
-  },
-  {
-    id: 'user-4',
-    name: 'Casey Lee',
-    email: 'casey.l@newdevils.net',
-    avatarId: 'avatar4',
-    role: 'TechLead',
-    departmentId: 'dept-2',
-  },
-   {
-    id: 'user-5',
-    name: 'Jordan Smith',
-    email: 'jordan.s@newdevils.net',
-    avatarId: 'avatar5',
-    role: 'User',
-    departmentId: 'dept-2',
-  },
+let usersSeed: Omit<User, 'avatarUrl'>[] = [
+    {
+        id: 'user-1-admin', // Placeholder, will be updated to actual auth UID
+        name: 'Yaroslav Admin',
+        email: 'yaroslav_system.admin@trafficdevils.net',
+        avatarId: 'avatar1',
+        role: 'Admin',
+        departmentId: 'dept-1',
+    },
+    {
+        id: 'user-2-lead',
+        name: 'Maria Garcia',
+        email: 'maria.g@trafficdevils.net',
+        avatarId: 'avatar2',
+        role: 'TechLead',
+        departmentId: 'dept-1',
+    },
+    {
+        id: 'user-3-user',
+        name: 'Sam Williams',
+        email: 'sam.w@trafficdevils.net',
+        avatarId: 'avatar3',
+        role: 'User',
+        departmentId: 'dept-1',
+    },
+     {
+        id: 'user-4-lead',
+        name: 'Casey Lee',
+        email: 'casey.l@newdevils.net',
+        avatarId: 'avatar4',
+        role: 'TechLead',
+        departmentId: 'dept-2',
+    },
+     {
+        id: 'user-5-user',
+        name: 'Jordan Smith',
+        email: 'jordan.s@newdevils.net',
+        avatarId: 'avatar5',
+        role: 'User',
+        departmentId: 'dept-2',
+    },
 ];
 
-let accessRequests: AccessRequest[] = [
-  {
-    id: 'req-1',
-    title: 'Access to Production Database',
-    description: 'Need read-only access to the production database for debugging purposes.',
-    requestType: 'Data',
-    status: 'Pending',
-    userId: 'user-3',
-    departmentId: 'dept-1',
-    createdAt: '2023-10-26T10:00:00Z',
-    updatedAt: '2023-10-26T10:00:00Z',
-  },
-  {
-    id: 'req-2',
-    title: 'Admin rights for Staging Server',
-    description: 'Requesting admin rights on staging for new feature deployment testing.',
-    requestType: 'System',
-    status: 'Approved',
-    userId: 'user-3',
-    departmentId: 'dept-1',
-    createdAt: '2023-10-25T14:30:00Z',
-    updatedAt: '2023-10-25T16:00:00Z',
-  },
-  {
-    id: 'req-3',
-    title: 'Marketing Analytics Tool Access',
-    description: 'Need access to our new marketing analytics platform to track campaign performance.',
-    requestType: 'Other',
-    status: 'Pending',
-    userId: 'user-5',
-    departmentId: 'dept-2',
-    createdAt: '2023-10-27T09:00:00Z',
-    updatedAt: '2023-10-27T09:00:00Z',
-  },
-  {
-    id: 'req-4',
-    title: 'GitHub Repo "Project-X" write access',
-    description: 'I need to push my latest changes for the upcoming release.',
-    requestType: 'System',
-    status: 'Rejected',
-    userId: 'user-3',
-    departmentId: 'dept-1',
-    createdAt: '2023-10-24T11:00:00Z',
-    updatedAt: '2023-10-24T12:30:00Z',
-  },
+let accessRequestsSeed: Omit<AccessRequest, 'id' | 'createdAt' | 'updatedAt'>[] = [
+    {
+        title: 'Access to Production Database',
+        description: 'Need read-only access to the production database for debugging purposes.',
+        requestType: 'Data',
+        status: 'Pending',
+        userId: 'user-3-user',
+        departmentId: 'dept-1',
+    },
+    {
+        title: 'Admin rights for Staging Server',
+        description: 'Requesting admin rights on staging for new feature deployment testing.',
+        requestType: 'System',
+        status: 'Approved',
+        userId: 'user-3-user',
+        departmentId: 'dept-1',
+    },
+    {
+        title: 'Marketing Analytics Tool Access',
+        description: 'Need access to our new marketing analytics platform to track campaign performance.',
+        requestType: 'Other',
+        status: 'Pending',
+        userId: 'user-5-user',
+        departmentId: 'dept-2',
+    },
+     {
+        title: 'GitHub Repo "Project-X" write access',
+        description: 'I need to push my latest changes for the upcoming release.',
+        requestType: 'System',
+        status: 'Rejected',
+        userId: 'user-3-user',
+        departmentId: 'dept-1',
+    },
 ];
 
-// Data access functions
-export const getDepartments = async (): Promise<Department[]> => [...departments];
-export const getUsers = async (): Promise<(User & { avatarUrl: string })[]> => {
-  const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
-  return users.map(user => ({
-    ...user,
-    avatarUrl: imageMap.get(user.avatarId) || '',
-  }))
+
+export async function seedDatabase() {
+    const db = useFirestore();
+    console.log("Checking if seeding is needed...");
+
+    const checkDocRef = doc(db, 'meta', 'seeded');
+    const checkDoc = await getDoc(checkDocRef);
+
+    if (checkDoc.exists() && checkDoc.data().done) {
+        console.log("Database already seeded. Skipping.");
+        return;
+    }
+
+    console.log("Seeding database...");
+    const batch = writeBatch(db);
+
+    // Seed departments
+    departmentsSeed.forEach(dept => {
+        const docRef = doc(db, 'departments', dept.id);
+        batch.set(docRef, dept);
+    });
+
+    // Seed users
+    usersSeed.forEach(user => {
+        const docRef = doc(db, 'users', user.id);
+        batch.set(docRef, user);
+    });
+    
+    // Seed requests
+    accessRequestsSeed.forEach(req => {
+        const docRef = doc(collection(db, 'accessRequests'));
+        batch.set(docRef, { 
+            ...req, 
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+    });
+
+    // Mark seeding as done
+    batch.set(checkDocRef, { done: true });
+
+    try {
+        await batch.commit();
+        console.log("Database seeded successfully!");
+    } catch(e) {
+        console.error("Error seeding database: ", e);
+    }
 }
-export const getAccessRequests = async (): Promise<AccessRequest[]> => [...accessRequests];
 
-// Data manipulation functions (for use in server actions)
-export const addAccessRequest = (data: { title: string; description: string; requestType: RequestType }, userId: string, departmentId: string) => {
-  const newRequest: AccessRequest = {
-    id: `req-${Date.now()}`,
-    status: 'Pending',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+
+// --- Data Manipulation Functions ---
+
+export const addAccessRequest = (
+  data: { title: string; description: string; requestType: RequestType },
+  userId: string,
+  departmentId: string
+) => {
+  const db = useFirestore();
+  const colRef = collection(db, 'accessRequests');
+  const newRequest = {
     ...data,
     userId,
     departmentId,
+    status: 'Pending' as RequestStatus,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
-  accessRequests.unshift(newRequest);
-  return newRequest;
+
+  addDoc(colRef, newRequest).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: colRef.path,
+      operation: 'create',
+      requestResourceData: newRequest
+    }));
+    console.error("Error adding document: ", error);
+  });
 };
 
 export const updateRequestStatus = (id: string, status: RequestStatus, techLeadComment?: string) => {
-  const request = accessRequests.find((r) => r.id === id);
-  if (request) {
-    request.status = status;
-    if (techLeadComment) {
-      request.techLeadComment = techLeadComment;
-    }
-    request.updatedAt = new Date().toISOString();
+  const db = useFirestore();
+  const docRef = doc(db, 'accessRequests', id);
+  const updateData: any = {
+    status,
+    updatedAt: serverTimestamp(),
+  };
+
+  if (techLeadComment) {
+    updateData.techLeadComment = techLeadComment;
   }
-  return request;
+  
+  updateDoc(docRef, updateData).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: docRef.path,
+      operation: 'update',
+      requestResourceData: updateData
+    }));
+    console.error("Error updating document: ", error);
+  });
 };
 
 export const deleteRequestById = (id: string) => {
-  accessRequests = accessRequests.filter((r) => r.id !== id);
+  const db = useFirestore();
+  const docRef = doc(db, 'accessRequests', id);
+  deleteDoc(docRef).catch(error => {
+     errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: docRef.path,
+      operation: 'delete'
+    }));
+    console.error("Error deleting document: ", error);
+  });
 };
 
 export const updateUserRoleInDb = (id: string, role: UserRole) => {
-    const user = users.find(u => u.id === id);
-    if(user) {
-        user.role = role;
+  const db = useFirestore();
+  const docRef = doc(db, 'users', id);
+  updateDoc(docRef, { role, updatedAt: serverTimestamp() }).catch(error => {
+     errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: docRef.path,
+      operation: 'update',
+      requestResourceData: { role }
+    }));
+    console.error("Error updating user role: ", error);
+  });
+};
+
+// --- This function is to create a user document in Firestore the first time they log in ---
+export const createUserProfile = async (user: import('firebase/auth').User) => {
+    const db = useFirestore();
+    const userRef = doc(db, 'users', user.uid);
+    const userDoc = await getDoc(userRef);
+    const usersQuery = query(collection(db, 'users'));
+    const usersSnapshot = await getDocs(usersQuery);
+    const usersCount = usersSnapshot.size;
+
+    const departmentsQuery = query(collection(db, 'departments'));
+    const deptsSnapshot = await getDocs(departmentsQuery);
+    const allDepts = deptsSnapshot.docs.map(d => ({...d.data(), id: d.id})) as Department[];
+
+    // If user document doesn't exist, create it
+    if (!userDoc.exists()) {
+        const newUser: Omit<User, 'avatarUrl'> = {
+            id: user.uid,
+            name: user.displayName || 'New User',
+            email: user.email!,
+            avatarId: `avatar${(usersCount % 5) + 1}`,
+            role: user.email === 'yaroslav_system.admin@trafficdevils.net' ? 'Admin' : 'User',
+            departmentId: allDepts.length > 0 ? allDepts[0].id : '',
+        };
+        
+        await setDoc(userRef, newUser).catch(error => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: userRef.path,
+                operation: 'create',
+                requestResourceData: newUser
+            }));
+            console.error("Error creating user profile: ", error);
+        });
+        
+        const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
+        return { ...newUser, avatarUrl: imageMap.get(newUser.avatarId) || '' };
+    } else {
+        const userData = userDoc.data() as Omit<User, 'avatarUrl'>;
+        const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
+        return { ...userData, id: userDoc.id, avatarUrl: imageMap.get(userData.avatarId) || '' };
     }
-    return user;
+};
+
+// This function can be called on first load to seed data if necessary
+// Be careful with this in production environments
+export const checkAndSeedDatabase = async () => {
+    const db = useFirestore();
+    const metaDocRef = doc(db, 'meta', 'isSeeded');
+    const docSnap = await getDoc(metaDocRef);
+
+    if (!docSnap.exists()) {
+        console.log("Seeding database for the first time...");
+        await seedDatabase();
+        console.log("Seeding complete.");
+    } else {
+        console.log("Database already seeded.");
+    }
 }
