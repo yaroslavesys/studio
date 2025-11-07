@@ -11,19 +11,20 @@ interface DashboardPageProps {
   appUser: User & { avatarUrl: string };
   allUsers: (User & { avatarUrl: string })[];
   allDepartments: Department[];
+  isDashboardLoading: boolean; // Receive loading state from layout
 }
 
-export default function DashboardPage({ appUser, allUsers, allDepartments }: DashboardPageProps) {
+export default function DashboardPage({ appUser, allUsers, allDepartments, isDashboardLoading }: DashboardPageProps) {
   const [requests, setRequests] = useState<AccessRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isRequestsLoading, setIsRequestsLoading] = useState(true);
 
   useEffect(() => {
     if (appUser) {
         const loadRequests = async () => {
-          setIsLoading(true);
+          setIsRequestsLoading(true);
           const allRequests = await getAccessRequests();
           setRequests(allRequests);
-          setIsLoading(false);
+          setIsRequestsLoading(false);
         };
         loadRequests();
     }
@@ -61,7 +62,9 @@ export default function DashboardPage({ appUser, allUsers, allDepartments }: Das
     });
   }, [requestsForView, allUsers]);
 
-  if (isLoading || !appUser || !allUsers || !allDepartments) {
+  const isLoading = isDashboardLoading || isRequestsLoading;
+
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -79,6 +82,10 @@ export default function DashboardPage({ appUser, allUsers, allDepartments }: Das
          <div className="animate-pulse bg-card h-96 rounded-lg"></div>
       </div>
     );
+  }
+  
+  if (!appUser) {
+    return null; // Or some other placeholder while appUser is being determined
   }
 
   return (

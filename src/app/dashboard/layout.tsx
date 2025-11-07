@@ -31,7 +31,7 @@ export default function DashboardLayout({
   const [appUser, setAppUser] = useState<User & { avatarUrl: string } | null>(null);
   const [allUsers, setAllUsers] = useState<(User & { avatarUrl: string })[]>([]);
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
   useEffect(() => {
     const checkAuthAndFetchData = async () => {
@@ -43,6 +43,8 @@ export default function DashboardLayout({
         router.push('/login');
         return;
       }
+
+      setIsDataLoading(true);
 
       const usersFromDb = await getUsers();
       const departmentsFromDb = await getDepartments();
@@ -61,7 +63,7 @@ export default function DashboardLayout({
             email: firebaseUser.email!,
             avatarId: `avatar${(usersFromDb.length % 5) + 1}`,
             role: firebaseUser.email === 'yaroslav_system.admin@trafficdevils.net' ? 'Admin' : 'User',
-            departmentId: departmentsFromDb[0].id, // Default to first department for new users
+            departmentId: departmentsFromDb.length > 0 ? departmentsFromDb[0].id : '', // Default to first department for new users
             avatarUrl: 'https://images.unsplash.com/photo-1599566147214-ce487862ea4f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBhdmF0YXJ8ZW58MHx8fHwxNzYyNDE5MjYzfDA&ixlib=rb-4.1.0&q=80&w=1080'
         };
         
@@ -69,7 +71,7 @@ export default function DashboardLayout({
         setAppUser(newUser);
         setAllUsers(prev => [...prev, newUser]);
       }
-      setIsLoading(false);
+      setIsDataLoading(false);
     };
 
     checkAuthAndFetchData();
@@ -79,7 +81,9 @@ export default function DashboardLayout({
     ? allDepartments.find(d => d.id === appUser.departmentId)
     : null;
 
-  if (isLoading || isUserLoading || !appUser) {
+  const isLoading = isUserLoading || isDataLoading;
+
+  if (isLoading || !appUser) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p>Loading user data...</p>
@@ -90,7 +94,8 @@ export default function DashboardLayout({
   const childrenWithProps = React.cloneElement(children as React.ReactElement, { 
     appUser, 
     allUsers, 
-    allDepartments 
+    allDepartments,
+    isDashboardLoading: isLoading, // Pass down the final loading state
   });
 
 
