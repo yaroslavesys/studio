@@ -1,7 +1,6 @@
 import { StatCards } from '@/components/dashboard/stat-cards';
 import { RequestsTable } from '@/components/dashboard/requests-table';
 import { NewRequestDialog } from '@/components/dashboard/new-request-dialog';
-import { DashboardSummary } from '@/components/dashboard/dashboard-summary';
 import { getAccessRequests, getDepartments, getUsers } from '@/lib/data';
 import { getCurrentUser } from '@/lib/auth';
 import type { AccessRequest } from '@/lib/types';
@@ -42,7 +41,6 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
-          <DashboardSummary requests={requestsForUser} />
           <NewRequestDialog user={user} />
         </div>
       </div>

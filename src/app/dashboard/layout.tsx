@@ -38,7 +38,7 @@ export default async function DashboardLayout({
             >
               <Logo />
               <span className="text-lg font-semibold text-foreground group-data-[collapsible=icon]:hidden">
-                AccessFlow
+                Devils access
               </span>
             </div>
           </SidebarHeader>

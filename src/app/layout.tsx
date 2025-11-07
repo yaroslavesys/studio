@@ -3,8 +3,8 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
-  title: 'AccessFlow',
-  description: 'Streamlined access management for your organization.',
+  title: 'Devils access',
+  description: 'Упрощенное управление доступом для вашей организации.',
 };
 
 export default function RootLayout({

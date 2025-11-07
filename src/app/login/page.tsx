@@ -13,9 +13,9 @@ export default function LoginPage() {
             <Logo />
           </div>
           <CardTitle className="font-headline text-3xl tracking-tighter">
-            Welcome to AccessFlow
+            Welcome to Devils access
           </CardTitle>
-          <CardDescription className="pt-1">Streamlined access management for your organization.</CardDescription>
+          <CardDescription className="pt-1">Упрощенное управление доступом для вашей организации.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <Button asChild className="w-full transform transition-transform duration-150 hover:scale-105" size="lg">
