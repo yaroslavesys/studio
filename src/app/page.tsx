@@ -18,18 +18,23 @@ import { useToast } from '@/hooks/use-toast';
 export default function LoginPage() {
   const { auth, user, isUserLoading } = useFirebase();
   const router = useRouter();
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(true); // Start as true to handle initial redirect check
   const { toast } = useToast();
 
+  // This effect runs ONLY ONCE on page load to check if this is a redirect from Google sign-in.
   useEffect(() => {
     if (auth) {
-      setIsSigningIn(true);
       getRedirectResult(auth)
         .then((result) => {
+          // If result is not null, it means the user just signed in.
           if (result && result.user) {
+            // Redirect to dashboard immediately after successful sign-in.
             router.push('/dashboard');
+          } else {
+            // If result is null, it means this is a normal page load, not a redirect.
+            // We can stop the loading indicator.
+            setIsSigningIn(false);
           }
-          setIsSigningIn(false);
         })
         .catch((error) => {
           console.error('Error getting redirect result:', error);
@@ -43,20 +48,20 @@ export default function LoginPage() {
     }
   }, [auth, router, toast]);
 
+  // This function handles the button click. It will always initiate the sign-in process.
   const handleSignIn = async () => {
     if (!auth) return;
-
-    if (user) {
-        router.push('/dashboard');
-        return;
-    }
-
+    
+    // If the user is already authenticated, a redirect will quickly resolve and bring them back.
+    // This simplifies the logic to a single action.
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({
       prompt: 'select_account',
     });
+
     try {
+      // This will redirect the user to the Google sign-in page.
       await signInWithRedirect(auth, provider);
     } catch (error) {
       console.error('Error starting sign-in redirect: ', error);
@@ -69,7 +74,8 @@ export default function LoginPage() {
     } 
   };
   
-  const isLoading = isUserLoading || isSigningIn;
+  // The page is loading if we are checking for a redirect result OR if the initial user state is still loading.
+  const isLoading = isSigningIn || isUserLoading;
 
   return (
     <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
