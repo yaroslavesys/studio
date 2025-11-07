@@ -23,14 +23,14 @@ export default function LoginPage() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (!isUserLoading && user) {
-      router.push('/dashboard');
-    }
-  }, [user, isUserLoading, router]);
-
   const handleSignIn = async () => {
     if (!auth) return;
+
+    if (user) {
+        router.push('/dashboard');
+        return;
+    }
+
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
     try {
@@ -47,7 +47,7 @@ export default function LoginPage() {
          setIsSigningIn(false);
          return;
       }
-      // onAuthStateChanged in layout will handle the redirect
+      router.push('/dashboard');
     } catch (error) {
       console.error('Error signing in with Google: ', error);
        toast({
@@ -60,14 +60,6 @@ export default function LoginPage() {
   };
 
   const isLoading = isUserLoading || isSigningIn;
-
-  if (!isUserLoading && user) {
-     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p>Redirecting to dashboard...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
@@ -90,7 +82,7 @@ export default function LoginPage() {
             size="lg"
             disabled={isLoading}
           >
-            {isLoading ? 'Signing In...' : 'Sign In with Google'}
+            {isLoading ? 'Signing In...' : (user ? 'Go to Dashboard' : 'Sign In with Google')}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             Restricted to users within approved domains.
