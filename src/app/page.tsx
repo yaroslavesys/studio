@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { useFirebase } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
