@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserManagement } from '@/components/admin/user-management';
 import { DepartmentManagement } from '@/components/admin/department-management';
 import { AllRequestsManagement } from '@/components/admin/all-requests-management';
-import { getAccessRequests, getDepartments, getUsers } from '@/lib/data';
+import { getAccessRequests } from '@/lib/data';
 import { ShieldCheck } from 'lucide-react';
 import type { User, Department, AccessRequest } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -22,10 +22,12 @@ export default function AdminPage({ appUser, allUsers, allDepartments }: AdminPa
   
    useEffect(() => {
     if (!appUser || appUser.role !== 'Admin') {
+      // This is a client-side check for extra security
       router.push('/dashboard');
       return;
     }
     const fetchAllData = async () => {
+      // Admins see all requests
       const reqs = await getAccessRequests();
       setRequests(reqs);
     }
@@ -37,6 +39,7 @@ export default function AdminPage({ appUser, allUsers, allDepartments }: AdminPa
     return <div className="flex min-h-screen items-center justify-center"><p>Redirecting...</p></div>;
   }
 
+  // Enrich requests with user and department names for display
   const requestsWithDetails = requests.map(request => {
     const requestingUser = allUsers.find(u => u.id === request.userId);
     const department = allDepartments.find(d => d.id === request.departmentId);

@@ -5,9 +5,8 @@ import { RequestsTable } from '@/components/dashboard/requests-table';
 import { NewRequestDialog } from '@/components/dashboard/new-request-dialog';
 import { getAccessRequests } from '@/lib/data';
 import type { AccessRequest, User, Department } from '@/lib/types';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
-// Props are passed from the layout
 interface DashboardPageProps {
   appUser: User & { avatarUrl: string };
   allUsers: (User & { avatarUrl: string })[];
@@ -16,39 +15,68 @@ interface DashboardPageProps {
 
 export default function DashboardPage({ appUser, allUsers, allDepartments }: DashboardPageProps) {
   const [requests, setRequests] = useState<AccessRequest[]>([]);
-  const [userDepartment, setUserDepartment] = useState<Department | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (appUser) {
-      const loadRequests = async () => {
-        const allRequests = await getAccessRequests();
-        setRequests(allRequests);
-      };
-      loadRequests();
-      setUserDepartment(allDepartments.find(d => d.id === appUser.departmentId) || null);
-    }
+    const loadRequests = async () => {
+      setIsLoading(true);
+      const allRequests = await getAccessRequests();
+      setRequests(allRequests);
+      setIsLoading(false);
+    };
+    loadRequests();
+  }, []);
+
+  const userDepartment = useMemo(() => {
+    return allDepartments.find(d => d.id === appUser.departmentId) || null;
   }, [appUser, allDepartments]);
 
-  if (!appUser) {
-    return null; // Should be handled by layout's loading state
+  const requestsForView = useMemo((): AccessRequest[] => {
+    if (!appUser) return [];
+    
+    switch (appUser.role) {
+      case 'User':
+        return requests.filter(r => r.userId === appUser.id);
+      case 'TechLead':
+        return requests.filter(r => r.departmentId === appUser.departmentId);
+      case 'Admin':
+        // Admins see department-specific view on main dashboard, and all requests in admin panel
+        return requests.filter(r => r.departmentId === appUser.departmentId);
+      default:
+        return [];
+    }
+  }, [requests, appUser]);
+
+  const requestsWithUserNames = useMemo(() => {
+    return requestsForView.map(request => {
+      const requestingUser = allUsers.find(u => u.id === request.userId);
+      return {
+        ...request,
+        userName: requestingUser?.name || 'Unknown User',
+      };
+    });
+  }, [requestsForView, allUsers]);
+
+  if (isLoading || !appUser) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="animate-pulse bg-muted h-9 w-48 rounded-md"></div>
+              <div className="animate-pulse bg-muted h-5 w-64 rounded-md mt-2"></div>
+            </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="animate-pulse bg-card h-28 rounded-lg"></div>
+            <div className="animate-pulse bg-card h-28 rounded-lg"></div>
+            <div className="animate-pulse bg-card h-28 rounded-lg"></div>
+            <div className="animate-pulse bg-card h-28 rounded-lg"></div>
+        </div>
+         <div className="animate-pulse bg-card h-96 rounded-lg"></div>
+      </div>
+    );
   }
 
-  // Filter requests based on user role
-  const requestsForView: AccessRequest[] =
-    appUser.role === 'User'
-      ? requests.filter(r => r.userId === appUser.id)
-      : appUser.role === 'TechLead'
-      ? requests.filter(r => r.departmentId === appUser.departmentId)
-      : requests; // Admin sees all requests on the admin page, this could be department-specific for them too
-
-  const requestsWithUserNames = requestsForView.map(request => {
-    const requestingUser = allUsers.find(u => u.id === request.userId);
-    return {
-      ...request,
-      userName: requestingUser?.name || 'Unknown User',
-    };
-  });
-  
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">

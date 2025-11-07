@@ -26,10 +26,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user: firebaseUser, auth, isUserLoading } = useFirebase();
+  const { user: firebaseUser, isUserLoading } = useFirebase();
   const router = useRouter();
-  const [appUser, setAppUser] = useState<(User & { avatarUrl: string }) | null>(null);
-  const [userDepartment, setUserDepartment] = useState<Department | null>(null);
+  const [appUser, setAppUser] = useState<User & { avatarUrl: string } | null>(null);
   const [allUsers, setAllUsers] = useState<(User & { avatarUrl: string })[]>([]);
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,7 +36,7 @@ export default function DashboardLayout({
   useEffect(() => {
     const checkAuthAndFetchData = async () => {
       if (isUserLoading) {
-        return; // Wait until Firebase auth state is resolved
+        return; 
       }
 
       if (!firebaseUser) {
@@ -45,8 +44,6 @@ export default function DashboardLayout({
         return;
       }
 
-      // In a real app, you would fetch user data from Firestore
-      // For now, we simulate it based on existing mock data
       const usersFromDb = await getUsers();
       const departmentsFromDb = await getDepartments();
       
@@ -58,24 +55,19 @@ export default function DashboardLayout({
       if (currentUser) {
         setAppUser(currentUser);
       } else {
-        // This is a new user. Create a record for them in your DB.
-        // For this demo, we'll create a local representation.
-        // In a real app, this would be a write to Firestore.
         const newUser: User & { avatarUrl: string } = {
             id: firebaseUser.uid,
             name: firebaseUser.displayName || 'New User',
             email: firebaseUser.email!,
             avatarId: `avatar${(usersFromDb.length % 5) + 1}`,
             role: firebaseUser.email === 'yaroslav_system.admin@trafficdevils.net' ? 'Admin' : 'User',
-            departmentId: departmentsFromDb[0].id, // Default to first department
+            departmentId: departmentsFromDb[0].id, // Default to first department for new users
             avatarUrl: 'https://images.unsplash.com/photo-1599566147214-ce487862ea4f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBhdmF0YXJ8ZW58MHx8fHwxNzYyNDE5MjYzfDA&ixlib=rb-4.1.0&q=80&w=1080'
         };
-
-        // Here you would call a server action or API to save the newUser to Firestore
+        
         console.log("New user created (locally for demo):", newUser);
-
         setAppUser(newUser);
-        setAllUsers([...usersFromDb, newUser]);
+        setAllUsers(prev => [...prev, newUser]);
       }
       setIsLoading(false);
     };
@@ -83,12 +75,9 @@ export default function DashboardLayout({
     checkAuthAndFetchData();
   }, [firebaseUser, isUserLoading, router]);
 
-   useEffect(() => {
-    if (appUser && allDepartments.length > 0) {
-      const dept = allDepartments.find(d => d.id === appUser.departmentId);
-      setUserDepartment(dept || null);
-    }
-  }, [appUser, allDepartments]);
+  const userDepartment = appUser && allDepartments.length > 0
+    ? allDepartments.find(d => d.id === appUser.departmentId)
+    : null;
 
   if (isLoading || isUserLoading || !appUser) {
     return (
@@ -98,7 +87,6 @@ export default function DashboardLayout({
     );
   }
 
-  // Clone the child element and pass props
   const childrenWithProps = React.cloneElement(children as React.ReactElement, { 
     appUser, 
     allUsers, 
@@ -151,7 +139,7 @@ export default function DashboardLayout({
               <SidebarTrigger className="md:hidden" />
               <div className="hidden md:block">
                 <h1 className="text-xl font-semibold tracking-tight">
-                  {userDepartment?.name || 'My Dashboard'}
+                  {appUser.role === 'Admin' ? 'Admin Dashboard' : (userDepartment?.name || 'My Dashboard')}
                 </h1>
                 <p className="text-xs text-muted-foreground">
                   {appUser.role} View
