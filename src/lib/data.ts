@@ -172,12 +172,13 @@ export const addAccessRequest = (
     updatedAt: serverTimestamp(),
   };
 
-  addDoc(colRef, newRequest).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
+  addDoc(colRef, newRequest).catch(async (error) => {
+    const contextualError = await FirestorePermissionError.create({
       path: colRef.path,
       operation: 'create',
       requestResourceData: newRequest
-    }));
+    });
+    errorEmitter.emit('permission-error', contextualError);
     console.error("Error adding document: ", error);
   });
 };
@@ -193,35 +194,39 @@ export const updateRequestStatus = (db: Firestore, id: string, status: RequestSt
     updateData.techLeadComment = techLeadComment;
   }
   
-  updateDoc(docRef, updateData).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
+  updateDoc(docRef, updateData).catch(async (error) => {
+    const contextualError = await FirestorePermissionError.create({
       path: docRef.path,
       operation: 'update',
       requestResourceData: updateData
-    }));
+    });
+    errorEmitter.emit('permission-error', contextualError);
     console.error("Error updating document: ", error);
   });
 };
 
 export const deleteRequestById = (db: Firestore, id: string) => {
   const docRef = doc(db, 'accessRequests', id);
-  deleteDoc(docRef).catch(error => {
-     errorEmitter.emit('permission-error', new FirestorePermissionError({
+  deleteDoc(docRef).catch(async (error) => {
+    const contextualError = await FirestorePermissionError.create({
       path: docRef.path,
       operation: 'delete'
-    }));
+    });
+    errorEmitter.emit('permission-error', contextualError);
     console.error("Error deleting document: ", error);
   });
 };
 
 export const updateUserRoleInDb = (db: Firestore, id: string, role: UserRole) => {
   const docRef = doc(db, 'users', id);
-  updateDoc(docRef, { role, updatedAt: serverTimestamp() }).catch(error => {
-     errorEmitter.emit('permission-error', new FirestorePermissionError({
+  const updateData = { role, updatedAt: serverTimestamp() };
+  updateDoc(docRef, updateData).catch(async (error) => {
+     const contextualError = await FirestorePermissionError.create({
       path: docRef.path,
       operation: 'update',
       requestResourceData: { role }
-    }));
+    });
+    errorEmitter.emit('permission-error', contextualError);
     console.error("Error updating user role: ", error);
   });
 };
@@ -249,12 +254,13 @@ export const createUserProfile = async (db: Firestore, user: import('firebase/au
             departmentId: allDepts.length > 0 ? allDepts[0].id : '',
         };
         
-        await setDoc(userRef, newUser).catch(error => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
+        await setDoc(userRef, newUser).catch(async (error) => {
+            const contextualError = await FirestorePermissionError.create({
                 path: userRef.path,
                 operation: 'create',
                 requestResourceData: newUser
-            }));
+            });
+            errorEmitter.emit('permission-error', contextualError);
             console.error("Error creating user profile: ", error);
         });
         

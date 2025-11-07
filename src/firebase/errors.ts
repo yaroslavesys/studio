@@ -13,6 +13,8 @@ interface FirebaseAuthToken {
   email_verified: boolean;
   phone_number: string | null;
   sub: string;
+  role?: string; // Add role
+  departmentId?: string; // Add departmentId
   firebase: {
     identities: Record<string, string[]>;
     sign_in_provider: string;
@@ -36,13 +38,16 @@ interface SecurityRuleRequest {
 
 /**
  * Builds a security-rule-compliant auth object from the Firebase User.
- * @param currentUser The currently authenticated Firebase user.
+ * This version attempts to parse custom claims from the ID token.
+ * @param idTokenResult The result from getIdTokenResult().
  * @returns An object that mirrors request.auth in security rules, or null.
  */
-function buildAuthObject(currentUser: User | null): FirebaseAuthObject | null {
+function buildAuthObject(currentUser: User, idTokenResult: import('firebase/auth').IdTokenResult | null): FirebaseAuthObject | null {
   if (!currentUser) {
     return null;
   }
+  
+  const claims = idTokenResult?.claims || {};
 
   const token: FirebaseAuthToken = {
     name: currentUser.displayName,
@@ -50,6 +55,8 @@ function buildAuthObject(currentUser: User | null): FirebaseAuthObject | null {
     email_verified: currentUser.emailVerified,
     phone_number: currentUser.phoneNumber,
     sub: currentUser.uid,
+    role: claims.role as string, // Extract role from claims
+    departmentId: claims.departmentId as string, // Extract departmentId from claims
     firebase: {
       identities: currentUser.providerData.reduce((acc, p) => {
         if (p.providerId) {
@@ -57,8 +64,8 @@ function buildAuthObject(currentUser: User | null): FirebaseAuthObject | null {
         }
         return acc;
       }, {} as Record<string, string[]>),
-      sign_in_provider: currentUser.providerData[0]?.providerId || 'custom',
-      tenant: currentUser.tenantId,
+      sign_in_provider: idTokenResult?.signInProvider || 'custom',
+      tenant: idTokenResult?.tenantId || null,
     },
   };
 
@@ -68,24 +75,25 @@ function buildAuthObject(currentUser: User | null): FirebaseAuthObject | null {
   };
 }
 
+
 /**
- * Builds the complete, simulated request object for the error message.
- * It safely tries to get the current authenticated user.
+ * Asynchronously builds the complete, simulated request object for the error message.
+ * It safely tries to get the current authenticated user and their ID token result.
  * @param context The context of the failed Firestore operation.
  * @returns A structured request object.
  */
-function buildRequestObject(context: SecurityRuleContext): SecurityRuleRequest {
+async function buildRequestObject(context: SecurityRuleContext): Promise<SecurityRuleRequest> {
   let authObject: FirebaseAuthObject | null = null;
   try {
-    // Safely attempt to get the current user.
     const firebaseAuth = getAuth();
     const currentUser = firebaseAuth.currentUser;
     if (currentUser) {
-      authObject = buildAuthObject(currentUser);
+      // Force refresh to get latest claims.
+      const idTokenResult = await currentUser.getIdTokenResult(true); 
+      authObject = buildAuthObject(currentUser, idTokenResult);
     }
-  } catch {
-    // This will catch errors if the Firebase app is not yet initialized.
-    // In this case, we'll proceed without auth information.
+  } catch(e) {
+    console.warn("Could not build auth object for error reporting:", e)
   }
 
   return {
@@ -95,6 +103,7 @@ function buildRequestObject(context: SecurityRuleContext): SecurityRuleRequest {
     resource: context.requestResourceData ? { data: context.requestResourceData } : undefined,
   };
 }
+
 
 /**
  * Builds the final, formatted error message for the LLM.
@@ -110,14 +119,25 @@ ${JSON.stringify(requestObject, null, 2)}`;
  * A custom error class designed to be consumed by an LLM for debugging.
  * It structures the error information to mimic the request object
  * available in Firestore Security Rules.
+ * The constructor is now private; use the static create method instead.
  */
 export class FirestorePermissionError extends Error {
   public readonly request: SecurityRuleRequest;
 
-  constructor(context: SecurityRuleContext) {
-    const requestObject = buildRequestObject(context);
+  private constructor(requestObject: SecurityRuleRequest) {
     super(buildErrorMessage(requestObject));
     this.name = 'FirebaseError';
     this.request = requestObject;
+  }
+  
+  /**
+   * Asynchronously creates a new FirestorePermissionError.
+   * This is now the required way to instantiate the class.
+   * @param context The context of the failed Firestore operation.
+   * @returns A Promise resolving to a FirestorePermissionError instance.
+   */
+  public static async create(context: SecurityRuleContext): Promise<FirestorePermissionError> {
+      const requestObject = await buildRequestObject(context);
+      return new FirestorePermissionError(requestObject);
   }
 }
