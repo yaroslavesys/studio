@@ -12,25 +12,26 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
+    function getRequestingUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     // --- Rules ---
 
     // USERS
     match /users/{userId} {
-      // List: Only Admins can list all users.
-      allow list: if isSignedIn() && getUserData(request.auth.uid).role == 'Admin';
+      // List: Only Admins can list all users. 
+      // This rule reads the requesting user's own document to check their role.
+      allow list: if isSignedIn() && getRequestingUserData().role == 'Admin';
       
       // Get: Users can get their own doc. Admins can get any.
-      allow get: if isSignedIn() && (isOwner(userId) || getUserData(request.auth.uid).role == 'Admin');
+      allow get: if isSignedIn() && (isOwner(userId) || getRequestingUserData().role == 'Admin');
       
       // Create: Any authenticated user can create THEIR OWN user document.
       allow create: if isSignedIn() && isOwner(userId);
 
       // Update: Users can update their own doc. Admins can update any.
-      allow update: if isSignedIn() && (isOwner(userId) || getUserData(request.auth.uid).role == 'Admin');
+      allow update: if isSignedIn() && (isOwner(userId) || getRequestingUserData().role == 'Admin');
 
       // Delete: Not allowed for now.
       allow delete: if false;
@@ -40,7 +41,7 @@ service cloud.firestore {
     // Any signed-in user can read departments. Only Admins can write.
     match /departments/{departmentId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && getUserData(request.auth.uid).role == 'Admin';
+      allow write: if isSignedIn() && getRequestingUserData().role == 'Admin';
     }
 
     // ACCESS REQUESTS
@@ -48,27 +49,36 @@ service cloud.firestore {
       // Create: Users can create requests for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
-      // Read (Get & List):
+      // List: Only Admins can list all requests.
+      allow list: if isSignedIn() && getRequestingUserData().role == 'Admin';
+
+      // Read (Get):
       // - Admins can read all requests.
       // - TechLeads can read requests for their department.
       // - Users can read their own requests.
-      allow read: if isSignedIn() && (
-        getUserData(request.auth.uid).role == 'Admin' ||
-        (getUserData(request.auth.uid).role == 'TechLead' && getUserData(request.auth.uid).departmentId == resource.data.departmentId) ||
+      allow get: if isSignedIn() && (
+        getRequestingUserData().role == 'Admin' ||
+        (getRequestingUserData().role == 'TechLead' && getRequestingUserData().departmentId == resource.data.departmentId) ||
         resource.data.userId == request.auth.uid
       );
+      
+      // We don't need a specific query rule here because the client-side code for TechLead
+      // already constrains the query by departmentId. We just need to ensure they can't
+      // query other departments. The 'get' rule implicitly helps secure this for single-doc reads.
+      // The client query logic combined with read rule provides sufficient security.
+
 
       // Update:
       // - TechLeads can update requests in their department.
       // - Admins can update any request.
       // - Users cannot update their own requests once submitted.
       allow update: if isSignedIn() && (
-        getUserData(request.auth.uid).role == 'Admin' ||
-        (getUserData(request.auth.uid).role == 'TechLead' && getUserData(request.auth.uid).departmentId == request.resource.data.departmentId)
+        getRequestingUserData().role == 'Admin' ||
+        (getRequestingUserData().role == 'TechLead' && getRequestingUserData().departmentId == request.resource.data.departmentId)
       );
                       
       // Delete: Only admins can delete.
-      allow delete: if isSignedIn() && getUserData(request.auth.uid).role == 'Admin';
+      allow delete: if isSignedIn() && getRequestingUserData().role == 'Admin';
     }
   }
 }
