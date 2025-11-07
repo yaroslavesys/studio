@@ -12,28 +12,22 @@ import { useRouter } from 'next/navigation';
 
 interface AdminPageProps {
   appUser: User;
+  allUsers: (User & { avatarUrl: string; })[];
+  allDepartments: Department[];
 }
 
-export default function AdminPage({ appUser }: AdminPageProps) {
+export default function AdminPage({ appUser, allUsers, allDepartments }: AdminPageProps) {
   const router = useRouter();
   const [requests, setRequests] = useState<AccessRequest[]>([]);
-  const [allUsers, setAllUsers] = useState<(User & { avatarUrl: string; })[]>([]);
-  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
-
+  
    useEffect(() => {
     if (!appUser || appUser.role !== 'Admin') {
       router.push('/dashboard');
       return;
     }
     const fetchAllData = async () => {
-      const [reqs, users, depts] = await Promise.all([
-        getAccessRequests(),
-        getUsers(),
-        getDepartments(),
-      ]);
+      const reqs = await getAccessRequests();
       setRequests(reqs);
-      setAllUsers(users);
-      setAllDepartments(depts);
     }
     fetchAllData();
   }, [appUser, router]);

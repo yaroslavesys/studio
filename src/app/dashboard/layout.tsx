@@ -19,7 +19,7 @@ import { Logo } from '@/components/logo';
 import { useFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import type { User, Department } from '@/lib/types';
-import { getDepartments, getUsers } from '@/lib/data'; // getUsers is now a mock
+import { getDepartments, getUsers } from '@/lib/data';
 
 export default function DashboardLayout({
   children,
@@ -98,6 +98,14 @@ export default function DashboardLayout({
     );
   }
 
+  // Clone the child element and pass props
+  const childrenWithProps = React.cloneElement(children as React.ReactElement, { 
+    appUser, 
+    allUsers, 
+    allDepartments 
+  });
+
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen">
@@ -153,7 +161,7 @@ export default function DashboardLayout({
             <UserNav user={appUser} />
           </header>
           <main className="flex-1 animate-fade-in p-4 sm:p-6">
-            {React.cloneElement(children as React.ReactElement, { appUser, allUsers, allDepartments })}
+            {childrenWithProps}
           </main>
         </SidebarInset>
       </div>
