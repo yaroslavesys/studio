@@ -82,8 +82,8 @@ export default function DashboardLayout({
 
   useEffect(() => {
     const authAndDataCheck = async () => {
-      if (isUserLoading) {
-        return; // Wait for Firebase Auth to resolve
+      if (isUserLoading || !firestore) {
+        return; // Wait for Firebase Auth and Firestore to be ready
       }
 
       if (!firebaseUser) {
@@ -92,12 +92,12 @@ export default function DashboardLayout({
       }
       
       // On first load, ensure DB has some demo data
-      await checkAndSeedDatabase();
+      await checkAndSeedDatabase(firestore);
 
       setIsDataLoading(true);
       
       // Find or create a user profile in Firestore
-      const userProfile = await createUserProfile(firebaseUser);
+      const userProfile = await createUserProfile(firestore, firebaseUser);
       if (userProfile) {
         setRealAppUser(userProfile);
       } else {
@@ -110,7 +110,7 @@ export default function DashboardLayout({
     
     authAndDataCheck();
 
-  }, [firebaseUser, isUserLoading, router]);
+  }, [firebaseUser, isUserLoading, router, firestore]);
 
   useEffect(() => {
      // Combined loading state

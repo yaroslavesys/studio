@@ -10,11 +10,12 @@ import {
   getDocs,
   writeBatch,
   getDoc,
-  query
+  query,
+  Firestore,
+  setDoc,
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { useFirestore } from '@/firebase/provider';
 import type { User, Department, AccessRequest, RequestStatus, RequestType, UserRole } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
@@ -105,8 +106,7 @@ let accessRequestsSeed: Omit<AccessRequest, 'id' | 'createdAt' | 'updatedAt'>[] 
 ];
 
 
-export async function seedDatabase() {
-    const db = useFirestore();
+export async function seedDatabase(db: Firestore) {
     console.log("Checking if seeding is needed...");
 
     const checkDocRef = doc(db, 'meta', 'seeded');
@@ -157,11 +157,11 @@ export async function seedDatabase() {
 // --- Data Manipulation Functions ---
 
 export const addAccessRequest = (
+  db: Firestore,
   data: { title: string; description: string; requestType: RequestType },
   userId: string,
   departmentId: string
 ) => {
-  const db = useFirestore();
   const colRef = collection(db, 'accessRequests');
   const newRequest = {
     ...data,
@@ -182,8 +182,7 @@ export const addAccessRequest = (
   });
 };
 
-export const updateRequestStatus = (id: string, status: RequestStatus, techLeadComment?: string) => {
-  const db = useFirestore();
+export const updateRequestStatus = (db: Firestore, id: string, status: RequestStatus, techLeadComment?: string) => {
   const docRef = doc(db, 'accessRequests', id);
   const updateData: any = {
     status,
@@ -204,8 +203,7 @@ export const updateRequestStatus = (id: string, status: RequestStatus, techLeadC
   });
 };
 
-export const deleteRequestById = (id: string) => {
-  const db = useFirestore();
+export const deleteRequestById = (db: Firestore, id: string) => {
   const docRef = doc(db, 'accessRequests', id);
   deleteDoc(docRef).catch(error => {
      errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -216,8 +214,7 @@ export const deleteRequestById = (id: string) => {
   });
 };
 
-export const updateUserRoleInDb = (id: string, role: UserRole) => {
-  const db = useFirestore();
+export const updateUserRoleInDb = (db: Firestore, id: string, role: UserRole) => {
   const docRef = doc(db, 'users', id);
   updateDoc(docRef, { role, updatedAt: serverTimestamp() }).catch(error => {
      errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -230,8 +227,7 @@ export const updateUserRoleInDb = (id: string, role: UserRole) => {
 };
 
 // --- This function is to create a user document in Firestore the first time they log in ---
-export const createUserProfile = async (user: import('firebase/auth').User) => {
-    const db = useFirestore();
+export const createUserProfile = async (db: Firestore, user: import('firebase/auth').User) => {
     const userRef = doc(db, 'users', user.uid);
     const userDoc = await getDoc(userRef);
     const usersQuery = query(collection(db, 'users'));
@@ -273,14 +269,13 @@ export const createUserProfile = async (user: import('firebase/auth').User) => {
 
 // This function can be called on first load to seed data if necessary
 // Be careful with this in production environments
-export const checkAndSeedDatabase = async () => {
-    const db = useFirestore();
+export const checkAndSeedDatabase = async (db: Firestore) => {
     const metaDocRef = doc(db, 'meta', 'isSeeded');
     const docSnap = await getDoc(metaDocRef);
 
     if (!docSnap.exists()) {
         console.log("Seeding database for the first time...");
-        await seedDatabase();
+        await seedDatabase(db);
         console.log("Seeding complete.");
     } else {
         console.log("Database already seeded.");
