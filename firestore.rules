@@ -46,7 +46,7 @@ service cloud.firestore {
                      isUserInRole(request.auth.uid, ['Admin']) ||
                      (isUserInRole(request.auth.uid, ['TechLead']) && resource.data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId));
 
-      // List: Only Admins can list all requests. Other roles get filtered lists on the client.
+      // List: Only Admins can list all requests.
       allow list: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
       
       // Update: 
@@ -54,7 +54,7 @@ service cloud.firestore {
       // - TechLeads can update status for their department's requests.
       // - Admins can update any request.
       allow update: if isSignedIn() && 
-                      (isUserInRole(request.auth.uid, ['Admin']) ||
+                      (isUserInoRole(request.auth.uid, ['Admin']) ||
                       (isUserInRole(request.auth.uid, ['TechLead']) && request.resource.data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId));
                       
       // Delete: Only admins can delete requests.
