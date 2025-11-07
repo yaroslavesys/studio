@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import React, { useEffect, useState } from 'react';
 import {
   SidebarProvider,
   Sidebar,
@@ -17,7 +18,6 @@ import { UserNav } from '@/components/auth/user-nav';
 import { LayoutDashboard, Shield, Users } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useFirebase } from '@/firebase';
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User, Department } from '@/lib/types';
 import { getDepartments, getUsers } from '@/lib/data';
