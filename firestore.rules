@@ -12,27 +12,28 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    function getUserRole(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.role;
-    }
+    // This function is problematic and is being replaced by custom claims checks.
+    // function getUserRole(userId) {
+    //   return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    // }
     
-    function isUserInRole(userId, roles) {
-      return getUserRole(userId) in roles;
+    function isUserInRole(roles) {
+      return request.auth.token.role in roles;
     }
 
     match /users/{userId} {
       // Admins can list all users.
-      allow list: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
+      allow list: if isSignedIn() && isUserInRole(['Admin']);
       // Users can only read their own profile, Admins can read any.
-      allow get: if isSignedIn() && (isOwner(userId) || isUserInRole(request.auth.uid, ['Admin']));
+      allow get: if isSignedIn() && (isOwner(userId) || isUserInRole(['Admin']));
       // New users can create their own profile. Admin can update any profile. Owner can update their own.
-      allow write: if isSignedIn() && ((request.method == 'create' && isOwner(userId)) || isUserInRole(request.auth.uid, ['Admin']) || (isOwner(userId) && request.method != 'create'));
+      allow write: if isSignedIn() && ((request.method == 'create' && isOwner(userId)) || isUserInRole(['Admin']) || (isOwner(userId) && request.method != 'create'));
     }
 
     // Departments are public for authenticated users. Only Admins can modify them.
     match /departments/{departmentId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
+      allow write: if isSignedIn() && isUserInRole(['Admin']);
     }
 
     // Access Requests
@@ -43,22 +44,22 @@ service cloud.firestore {
       // Get: Users can read their own requests. TechLeads can read requests for their department. Admins can read all.
       allow get: if isSignedIn() && 
                     (resource.data.userId == request.auth.uid || 
-                     isUserInRole(request.auth.uid, ['Admin']) ||
-                     (isUserInRole(request.auth.uid, ['TechLead']) && resource.data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId));
+                     isUserInRole(['Admin']) ||
+                     (isUserInRole(['TechLead']) && resource.data.departmentId == request.auth.token.departmentId));
 
       // List: Only Admins can list all requests.
-      allow list: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
+      allow list: if isSignedIn() && isUserInRole(['Admin']);
       
       // Update: 
       // - Owners can't update.
       // - TechLeads can update status for their department's requests.
       // - Admins can update any request.
       allow update: if isSignedIn() && 
-                      (isUserInRole(request.auth.uid, ['Admin']) ||
-                      (isUserInRole(request.auth.uid, ['TechLead']) && request.resource.data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId));
+                      (isUserInRole(['Admin']) ||
+                      (isUserInRole(['TechLead']) && request.resource.data.departmentId == request.auth.token.departmentId));
                       
       // Delete: Only admins can delete requests.
-      allow delete: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
+      allow delete: if isSignedIn() && isUserInRole(['Admin']);
     }
   }
 }
