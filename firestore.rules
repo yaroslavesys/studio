@@ -19,6 +19,10 @@ service cloud.firestore {
     function getRequestingUserRole() {
       return getRole(request.auth.uid);
     }
+    
+    function getRequestingUserDepartmentId() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId;
+    }
 
     // --- Rules ---
 
@@ -61,7 +65,7 @@ service cloud.firestore {
       // The client-side code is responsible for building the correct query. These rules enforce it.
       allow list: if isSignedIn() && (
         getRequestingUserRole() == 'Admin' ||
-        (getRequestingUserRole() == 'TechLead' && request.query.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId) ||
+        (getRequestingUserRole() == 'TechLead' && request.query.departmentId == getRequestingUserDepartmentId()) ||
         (request.query.userId == request.auth.uid)
       );
 
@@ -71,7 +75,7 @@ service cloud.firestore {
       // - Admins can read all requests.
       allow get: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
-        (getRequestingUserRole() == 'TechLead' && resource.data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId) ||
+        (getRequestingUserRole() == 'TechLead' && resource.data.departmentId == getRequestingUserDepartmentId()) ||
         getRequestingUserRole() == 'Admin'
       );
       
@@ -81,7 +85,7 @@ service cloud.firestore {
       // - Users cannot update their own requests once submitted.
       allow update: if isSignedIn() && (
          getRequestingUserRole() == 'Admin' ||
-        (getRequestingUserRole() == 'TechLead' && get(/databases/$(database)/documents/accessRequests/$(accessRequestId)).data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId)
+        (getRequestingUserRole() == 'TechLead' && get(/databases/$(database)/documents/accessRequests/$(accessRequestId)).data.departmentId == getRequestingUserDepartmentId())
       );
                       
       // Delete: Only admins can delete.
