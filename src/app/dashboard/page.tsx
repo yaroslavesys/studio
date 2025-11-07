@@ -3,32 +3,13 @@
 import { StatCards } from '@/components/dashboard/stat-cards';
 import { RequestsTable } from '@/components/dashboard/requests-table';
 import { NewRequestDialog } from '@/components/dashboard/new-request-dialog';
-import { getAccessRequests } from '@/lib/data';
-import type { AccessRequest, User, Department } from '@/lib/types';
-import { useEffect, useState, useMemo } from 'react';
+import type { AccessRequest } from '@/lib/types';
+import { useMemo } from 'react';
+import { useDashboard } from './layout'; // Import the new hook
 
-interface DashboardPageProps {
-  appUser: User & { avatarUrl: string };
-  allUsers: (User & { avatarUrl: string })[];
-  allDepartments: Department[];
-  isDashboardLoading: boolean; // Receive loading state from layout
-}
-
-export default function DashboardPage({ appUser, allUsers, allDepartments, isDashboardLoading }: DashboardPageProps) {
-  const [requests, setRequests] = useState<AccessRequest[]>([]);
-  const [isRequestsLoading, setIsRequestsLoading] = useState(true);
-
-  useEffect(() => {
-    if (appUser) {
-        const loadRequests = async () => {
-          setIsRequestsLoading(true);
-          const allRequests = await getAccessRequests();
-          setRequests(allRequests);
-          setIsRequestsLoading(false);
-        };
-        loadRequests();
-    }
-  }, [appUser]);
+export default function DashboardPage() {
+  // Get all data from the context provided by the layout
+  const { appUser, allUsers, allDepartments, allRequests, isDashboardLoading } = useDashboard();
   
   const userDepartment = useMemo(() => {
     if (!allDepartments || !appUser) return null;
@@ -36,20 +17,20 @@ export default function DashboardPage({ appUser, allUsers, allDepartments, isDas
   }, [appUser, allDepartments]);
 
   const requestsForView = useMemo((): AccessRequest[] => {
-    if (!appUser || !requests) return [];
+    if (!appUser || !allRequests) return [];
     
     switch (appUser.role) {
       case 'User':
-        return requests.filter(r => r.userId === appUser.id);
+        return allRequests.filter(r => r.userId === appUser.id);
       case 'TechLead':
-        return requests.filter(r => r.departmentId === appUser.departmentId);
+        return allRequests.filter(r => r.departmentId === appUser.departmentId);
       case 'Admin':
         // Admins see department-specific view on main dashboard, and all requests in admin panel
-        return requests.filter(r => r.departmentId === appUser.departmentId);
+        return allRequests.filter(r => r.departmentId === appUser.departmentId);
       default:
         return [];
     }
-  }, [requests, appUser]);
+  }, [allRequests, appUser]);
 
   const requestsWithUserNames = useMemo(() => {
     if (!requestsForView || !allUsers) return [];
@@ -62,9 +43,8 @@ export default function DashboardPage({ appUser, allUsers, allDepartments, isDas
     });
   }, [requestsForView, allUsers]);
 
-  const isLoading = isDashboardLoading || isRequestsLoading;
 
-  if (isLoading) {
+  if (isDashboardLoading) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -85,7 +65,8 @@ export default function DashboardPage({ appUser, allUsers, allDepartments, isDas
   }
   
   if (!appUser) {
-    return null; // Or some other placeholder while appUser is being determined
+    // This can happen briefly during initial load or if something goes wrong
+    return null; 
   }
 
   return (

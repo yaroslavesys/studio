@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, createContext, useContext } from 'react';
 import {
   SidebarProvider,
   Sidebar,
@@ -18,8 +18,29 @@ import { LayoutDashboard, Shield } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import type { User, Department } from '@/lib/types';
-import { getDepartments, getUsers } from '@/lib/data';
+import type { User, Department, AccessRequest } from '@/lib/types';
+import { getDepartments, getUsers, getAccessRequests } from '@/lib/data';
+
+// 1. Create a context to hold all our dashboard data
+interface DashboardContextProps {
+  appUser: (User & { avatarUrl: string }) | null;
+  allUsers: (User & { avatarUrl: string })[];
+  allDepartments: Department[];
+  allRequests: AccessRequest[];
+  isDashboardLoading: boolean;
+}
+
+const DashboardContext = createContext<DashboardContextProps | null>(null);
+
+// Custom hook to use the context
+export const useDashboard = () => {
+  const context = useContext(DashboardContext);
+  if (!context) {
+    throw new Error('useDashboard must be used within a DashboardLayout');
+  }
+  return context;
+};
+
 
 export default function DashboardLayout({
   children,
@@ -28,9 +49,11 @@ export default function DashboardLayout({
 }) {
   const { user: firebaseUser, isUserLoading } = useFirebase();
   const router = useRouter();
-  const [appUser, setAppUser] = useState<User & { avatarUrl: string } | null>(null);
+  
+  const [appUser, setAppUser] = useState<(User & { avatarUrl: string }) | null>(null);
   const [allUsers, setAllUsers] = useState<(User & { avatarUrl: string })[]>([]);
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
+  const [allRequests, setAllRequests] = useState<AccessRequest[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
 
   useEffect(() => {
@@ -46,11 +69,16 @@ export default function DashboardLayout({
 
       setIsDataLoading(true);
 
-      const usersFromDb = await getUsers();
-      const departmentsFromDb = await getDepartments();
+      // Fetch all data in parallel
+      const [usersFromDb, departmentsFromDb, requestsFromDb] = await Promise.all([
+        getUsers(),
+        getDepartments(),
+        getAccessRequests()
+      ]);
       
       setAllUsers(usersFromDb);
       setAllDepartments(departmentsFromDb);
+      setAllRequests(requestsFromDb);
 
       let currentUser = usersFromDb.find(u => u.email.toLowerCase() === firebaseUser.email?.toLowerCase());
 
@@ -63,10 +91,9 @@ export default function DashboardLayout({
             email: firebaseUser.email!,
             avatarId: `avatar${(usersFromDb.length % 5) + 1}`,
             role: firebaseUser.email === 'yaroslav_system.admin@trafficdevils.net' ? 'Admin' : 'User',
-            departmentId: departmentsFromDb.length > 0 ? departmentsFromDb[0].id : '', // Default to first department for new users
+            departmentId: departmentsFromDb.length > 0 ? departmentsFromDb[0].id : '', 
             avatarUrl: 'https://images.unsplash.com/photo-1599566147214-ce487862ea4f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBhdmF0YXJ8ZW58MHx8fHwxNzYyNDE5MjYzfDA&ixlib=rb-4.1.0&q=80&w=1080'
         };
-        
         console.log("New user created (locally for demo):", newUser);
         setAppUser(newUser);
         setAllUsers(prev => [...prev, newUser]);
@@ -82,6 +109,14 @@ export default function DashboardLayout({
     : null;
 
   const isLoading = isUserLoading || isDataLoading;
+  
+  const contextValue: DashboardContextProps = {
+      appUser,
+      allUsers,
+      allDepartments,
+      allRequests,
+      isDashboardLoading: isLoading
+  };
 
   if (isLoading || !appUser) {
     return (
@@ -91,73 +126,67 @@ export default function DashboardLayout({
     );
   }
 
-  const childrenWithProps = React.cloneElement(children as React.ReactElement, { 
-    appUser, 
-    allUsers, 
-    allDepartments,
-    isDashboardLoading: isLoading, // Pass down the final loading state
-  });
-
-
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen">
-        <Sidebar>
-          <SidebarHeader className="p-4">
-            <div
-              className="flex items-center gap-2"
-              data-testid="sidebar-header-content"
-            >
-              <Logo />
-              <span className="text-lg font-semibold text-foreground group-data-[collapsible=icon]:hidden">
-                Devils access
-              </span>
-            </div>
-          </SidebarHeader>
+    <DashboardContext.Provider value={contextValue}>
+      <SidebarProvider>
+        <div className="flex min-h-screen">
+          <Sidebar>
+            <SidebarHeader className="p-4">
+              <div
+                className="flex items-center gap-2"
+                data-testid="sidebar-header-content"
+              >
+                <Logo />
+                <span className="text-lg font-semibold text-foreground group-data-[collapsible=icon]:hidden">
+                  Devils access
+                </span>
+              </div>
+            </SidebarHeader>
 
-          <SidebarContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Dashboard">
-                  <Link href="/dashboard">
-                    <LayoutDashboard />
-                    <span>Dashboard</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              {appUser.role === 'Admin' && (
+            <SidebarContent>
+              <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Admin Panel">
-                    <Link href="/dashboard/admin">
-                      <Shield />
-                      <span>Admin Panel</span>
+                  <SidebarMenuButton asChild tooltip="Dashboard">
+                    <Link href="/dashboard">
+                      <LayoutDashboard />
+                      <span>Dashboard</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              )}
-            </SidebarMenu>
-          </SidebarContent>
-        </Sidebar>
-        <SidebarInset>
-          <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="md:hidden" />
-              <div className="hidden md:block">
-                <h1 className="text-xl font-semibold tracking-tight">
-                  {appUser.role === 'Admin' ? 'Admin Dashboard' : (userDepartment?.name || 'My Dashboard')}
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  {appUser.role} View
-                </p>
+                {appUser.role === 'Admin' && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="Admin Panel">
+                      <Link href="/dashboard/admin">
+                        <Shield />
+                        <span>Admin Panel</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarContent>
+          </Sidebar>
+          <SidebarInset>
+            <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
+              <div className="flex items-center gap-2">
+                <SidebarTrigger className="md:hidden" />
+                <div className="hidden md:block">
+                  <h1 className="text-xl font-semibold tracking-tight">
+                    {appUser.role === 'Admin' ? 'Admin Dashboard' : (userDepartment?.name || 'My Dashboard')}
+                  </h1>
+                  <p className="text-xs text-muted-foreground">
+                    {appUser.role} View
+                  </p>
+                </div>
               </div>
-            </div>
-            <UserNav user={appUser} />
-          </header>
-          <main className="flex-1 animate-fade-in p-4 sm:p-6">
-            {childrenWithProps}
-          </main>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+              <UserNav user={appUser} />
+            </header>
+            <main className="flex-1 animate-fade-in p-4 sm:p-6">
+              {children}
+            </main>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    </DashboardContext.Provider>
   );
 }

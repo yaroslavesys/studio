@@ -1,46 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserManagement } from '@/components/admin/user-management';
 import { DepartmentManagement } from '@/components/admin/department-management';
 import { AllRequestsManagement } from '@/components/admin/all-requests-management';
-import { getAccessRequests } from '@/lib/data';
 import { ShieldCheck } from 'lucide-react';
-import type { User, Department, AccessRequest } from '@/lib/types';
+import { useDashboard } from '../layout';
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
-interface AdminPageProps {
-  appUser: User;
-  allUsers: (User & { avatarUrl: string; })[];
-  allDepartments: Department[];
-}
-
-export default function AdminPage({ appUser, allUsers, allDepartments }: AdminPageProps) {
+export default function AdminPage() {
   const router = useRouter();
-  const [requests, setRequests] = useState<AccessRequest[]>([]);
-  
-   useEffect(() => {
-    if (!appUser || appUser.role !== 'Admin') {
-      // This is a client-side check for extra security
+  // Get all data from the context provided by the layout
+  const { appUser, allUsers, allDepartments, allRequests, isDashboardLoading } = useDashboard();
+
+  useEffect(() => {
+    if (!isDashboardLoading && (!appUser || appUser.role !== 'Admin')) {
       router.push('/dashboard');
-      return;
     }
-    const fetchAllData = async () => {
-      // Admins see all requests
-      const reqs = await getAccessRequests();
-      setRequests(reqs);
-    }
-    fetchAllData();
-  }, [appUser, router]);
+  }, [appUser, isDashboardLoading, router]);
 
-
-  if (!appUser || appUser.role !== 'Admin') {
-    return <div className="flex min-h-screen items-center justify-center"><p>Redirecting...</p></div>;
+  if (isDashboardLoading || !appUser || appUser.role !== 'Admin') {
+    return <div className="flex min-h-screen items-center justify-center"><p>Loading or redirecting...</p></div>;
   }
 
   // Enrich requests with user and department names for display
-  const requestsWithDetails = requests.map(request => {
+  const requestsWithDetails = allRequests.map(request => {
     const requestingUser = allUsers.find(u => u.id === request.userId);
     const department = allDepartments.find(d => d.id === request.departmentId);
     return {
