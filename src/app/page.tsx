@@ -61,7 +61,7 @@ export default function LoginPage() {
 
   const isLoading = isUserLoading || isSigningIn;
 
-  if (user) {
+  if (!isUserLoading && user) {
      return (
       <div className="flex min-h-screen items-center justify-center">
         <p>Redirecting to dashboard...</p>
