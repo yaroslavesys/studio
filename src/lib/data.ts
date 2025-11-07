@@ -12,9 +12,9 @@ let departments: Department[] = [
 
 let users: User[] = [
   {
-    id: 'user-1',
-    name: 'Alex Johnson',
-    email: 'alex.j@trafficdevils.net',
+    id: 'user-1', // This should be replaced by a real Admin UID from firebase
+    name: 'Yaroslav Admin',
+    email: 'yaroslav_system.admin@trafficdevils.net',
     avatarId: 'avatar1',
     role: 'Admin',
     departmentId: 'dept-1',
@@ -38,7 +38,7 @@ let users: User[] = [
   {
     id: 'user-4',
     name: 'Casey Lee',
-    email: 'casey.l@trafficdevils.net',
+    email: 'casey.l@newdevils.net',
     avatarId: 'avatar4',
     role: 'TechLead',
     departmentId: 'dept-2',
@@ -46,7 +46,7 @@ let users: User[] = [
    {
     id: 'user-5',
     name: 'Jordan Smith',
-    email: 'jordan.s@trafficdevils.net',
+    email: 'jordan.s@newdevils.net',
     avatarId: 'avatar5',
     role: 'User',
     departmentId: 'dept-2',
@@ -102,11 +102,10 @@ let accessRequests: AccessRequest[] = [
 
 // Data access functions
 export const getDepartments = async (): Promise<Department[]> => [...departments];
-export const getUsers = async (): Promise<User[]> => {
+export const getUsers = async (): Promise<(User & { avatarUrl: string })[]> => {
   const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
   return users.map(user => ({
     ...user,
-    // @ts-ignore
     avatarUrl: imageMap.get(user.avatarId) || '',
   }))
 }
@@ -127,10 +126,13 @@ export const addAccessRequest = (data: { title: string; description: string; req
   return newRequest;
 };
 
-export const updateRequestStatus = (id: string, status: RequestStatus) => {
+export const updateRequestStatus = (id: string, status: RequestStatus, techLeadComment?: string) => {
   const request = accessRequests.find((r) => r.id === id);
   if (request) {
     request.status = status;
+    if (techLeadComment) {
+      request.techLeadComment = techLeadComment;
+    }
     request.updatedAt = new Date().toISOString();
   }
   return request;

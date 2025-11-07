@@ -13,11 +13,15 @@ import { useFirebase } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+
+const ALLOWED_DOMAINS = ['trafficdevils.net', 'newdevils.net'];
 
 export default function LoginPage() {
   const { auth, user, isUserLoading } = useFirebase();
   const router = useRouter();
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!isUserLoading && user) {
@@ -30,20 +34,39 @@ export default function LoginPage() {
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-      // onAuthStateChanged will handle the redirect
+      const result = await signInWithPopup(auth, provider);
+      const emailDomain = result.user.email?.split('@')[1];
+      
+      const isAdmin = result.user.email === 'yaroslav_system.admin@trafficdevils.net';
+
+      if (!isAdmin && (!emailDomain || !ALLOWED_DOMAINS.includes(emailDomain))) {
+         await auth.signOut();
+         toast({
+            variant: "destructive",
+            title: "Access Denied",
+            description: "Your email domain is not authorized for access.",
+         });
+         setIsSigningIn(false);
+         return;
+      }
+      // onAuthStateChanged in layout will handle the redirect
     } catch (error) {
       console.error('Error signing in with Google: ', error);
+       toast({
+        variant: "destructive",
+        title: "Sign-in Failed",
+        description: "An error occurred during the sign-in process.",
+      });
       setIsSigningIn(false);
     }
   };
 
-  const isLoading = isUserLoading || isSigningIn || user;
+  const isLoading = isUserLoading || isSigningIn;
 
-  if (isLoading) {
-    return (
+  if (user) {
+     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p>Loading...</p>
+        <p>Redirecting to dashboard...</p>
       </div>
     );
   }
@@ -67,12 +90,12 @@ export default function LoginPage() {
             onClick={handleSignIn}
             className="w-full transform transition-transform duration-150 hover:scale-105"
             size="lg"
-            disabled={isSigningIn}
+            disabled={isLoading}
           >
-            {isSigningIn ? 'Signing In...' : 'Sign In with Google'}
+            {isLoading ? 'Signing In...' : 'Sign In with Google'}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            Restricted to users within the @trafficdevils.net domain.
+            Restricted to users within approved domains.
           </p>
         </CardContent>
       </Card>

@@ -5,31 +5,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserManagement } from '@/components/admin/user-management';
 import { DepartmentManagement } from '@/components/admin/department-management';
 import { AllRequestsManagement } from '@/components/admin/all-requests-management';
-import { getAccessRequests } from '@/lib/data';
+import { getAccessRequests, getDepartments, getUsers } from '@/lib/data';
 import { ShieldCheck } from 'lucide-react';
 import type { User, Department, AccessRequest } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 
 interface AdminPageProps {
   appUser: User;
-  allUsers: (User & { avatarUrl: string })[];
-  allDepartments: Department[];
 }
 
-export default function AdminPage({ appUser, allUsers, allDepartments }: AdminPageProps) {
+export default function AdminPage({ appUser }: AdminPageProps) {
   const router = useRouter();
   const [requests, setRequests] = useState<AccessRequest[]>([]);
+  const [allUsers, setAllUsers] = useState<(User & { avatarUrl: string; })[]>([]);
+  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
 
    useEffect(() => {
     if (!appUser || appUser.role !== 'Admin') {
       router.push('/dashboard');
       return;
     }
-    const fetchRequests = async () => {
-      const reqs = await getAccessRequests();
+    const fetchAllData = async () => {
+      const [reqs, users, depts] = await Promise.all([
+        getAccessRequests(),
+        getUsers(),
+        getDepartments(),
+      ]);
       setRequests(reqs);
+      setAllUsers(users);
+      setAllDepartments(depts);
     }
-    fetchRequests();
+    fetchAllData();
   }, [appUser, router]);
 
 
@@ -43,6 +49,7 @@ export default function AdminPage({ appUser, allUsers, allDepartments }: AdminPa
     return {
       ...request,
       userName: requestingUser?.name || 'Unknown User',
+      userEmail: requestingUser?.email || 'N/A',
       departmentName: department?.name || 'Unknown Dept',
     };
   });
@@ -60,11 +67,11 @@ export default function AdminPage({ appUser, allUsers, allDepartments }: AdminPa
           </p>
         </div>
       </div>
-      <Tabs defaultValue="users" className="space-y-4">
+      <Tabs defaultValue="requests" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="requests">Access Requests</TabsTrigger>
           <TabsTrigger value="users">User Management</TabsTrigger>
           <TabsTrigger value="departments">Department Management</TabsTrigger>
-          <TabsTrigger value="requests">All Requests</TabsTrigger>
         </TabsList>
         <TabsContent value="users">
           <UserManagement users={allUsers} departments={allDepartments} />

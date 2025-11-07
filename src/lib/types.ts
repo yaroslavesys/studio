@@ -27,4 +27,5 @@ export interface AccessRequest {
   departmentId: string;
   createdAt: string;
   updatedAt: string;
+  techLeadComment?: string;
 }

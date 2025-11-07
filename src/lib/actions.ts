@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { addAccessRequest, updateRequestStatus, deleteRequestById, updateUserRoleInDb } from './data';
-import type { RequestType, UserRole } from './types';
+import type { RequestType, UserRole, RequestStatus } from './types';
 
 const requestSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters long.'),
@@ -38,14 +38,8 @@ export async function createAccessRequest(
   revalidatePath('/dashboard/admin');
 }
 
-export async function approveRequest(id: string) {
-  updateRequestStatus(id, 'Approved');
-  revalidatePath('/dashboard');
-  revalidatePath('/dashboard/admin');
-}
-
-export async function rejectRequest(id: string) {
-  updateRequestStatus(id, 'Rejected');
+export async function updateRequest(id: string, status: RequestStatus, techLeadComment?: string) {
+  updateRequestStatus(id, status, techLeadComment);
   revalidatePath('/dashboard');
   revalidatePath('/dashboard/admin');
 }

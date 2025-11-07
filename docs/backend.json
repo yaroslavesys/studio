@@ -8,77 +8,45 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the user entity."
-        },
-        "googleId": {
-          "type": "string",
-          "description": "Google ID of the user, obtained during Google OAuth2 authentication."
+          "description": "Unique identifier for the user entity, same as Firebase Auth UID."
         },
         "email": {
           "type": "string",
           "description": "Email address of the user.",
           "format": "email"
         },
-        "firstName": {
+        "name": {
           "type": "string",
-          "description": "First name of the user."
+          "description": "Full name of the user."
         },
-        "lastName": {
+        "avatarId": {
           "type": "string",
-          "description": "Last name of the user."
+          "description": "Identifier for the user's avatar image."
         },
-        "roleId": {
+        "role": {
           "type": "string",
-          "description": "Reference to Role. (Relationship: Role 1:N User)"
+          "description": "Role of the user in the system.",
+          "enum": ["Admin", "TechLead", "User"]
         },
         "departmentId": {
           "type": "string",
-          "description": "Reference to Department. (Relationship: Department 1:N User)"
+          "description": "The ID of the department the user belongs to."
         }
       },
       "required": [
         "id",
-        "googleId",
         "email",
-        "firstName",
-        "lastName",
-        "roleId",
-        "departmentId"
-      ]
-    },
-    "Role": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Role",
-      "type": "object",
-      "description": "Represents a user role within the application (e.g., User, TechLead, Admin).",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the role entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "Name of the role (e.g., User, TechLead, Admin)."
-        },
-        "permissions": {
-          "type": "array",
-          "description": "Array of permissions associated with the role.",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "id",
         "name",
-        "permissions"
+        "avatarId",
+        "role",
+        "departmentId"
       ]
     },
     "Department": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Department",
       "type": "object",
-      "description": "Represents a department within the organization.",
+      "description": "Represents a department (group) within the organization.",
       "properties": {
         "id": {
           "type": "string",
@@ -87,16 +55,11 @@
         "name": {
           "type": "string",
           "description": "Name of the department."
-        },
-        "description": {
-          "type": "string",
-          "description": "Description of the department."
         }
       },
       "required": [
         "id",
-        "name",
-        "description"
+        "name"
       ]
     },
     "AccessRequest": {
@@ -111,7 +74,11 @@
         },
         "userId": {
           "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N AccessRequest)"
+          "description": "ID of the user who created the request."
+        },
+        "departmentId": {
+          "type": "string",
+          "description": "ID of the department for which the request is made."
         },
         "title": {
           "type": "string",
@@ -119,33 +86,43 @@
         },
         "description": {
           "type": "string",
-          "description": "Description of the access request."
+          "description": "User's justification for the access request."
         },
         "requestType": {
           "type": "string",
-          "description": "Type of access requested (e.g., system, data, other)."
+          "description": "Type of access requested (e.g., System, Data, Other).",
+           "enum": ["System", "Data", "Other"]
         },
         "status": {
           "type": "string",
-          "description": "Status of the access request (e.g., pending, approved, rejected)."
+          "description": "Current status of the access request.",
+          "enum": ["Pending", "Approved", "Rejected"]
         },
-        "techLeadId": {
+        "techLeadComment": {
           "type": "string",
-          "description": "Reference to User representing the TechLead who approved or rejected the request. (Relationship: User 1:N AccessRequest - TechLead)"
+          "description": "Optional comment from the TechLead."
         },
-        "approvalDate": {
-          "type": "string",
-          "description": "Date and time when the request was approved or rejected.",
-          "format": "date-time"
+        "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the request was created."
+        },
+        "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the request was last updated."
         }
       },
       "required": [
         "id",
         "userId",
+        "departmentId",
         "title",
         "description",
         "requestType",
-        "status"
+        "status",
+        "createdAt",
+        "updatedAt"
       ]
     }
   },
@@ -155,76 +132,17 @@
     ]
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores user profiles, authenticated via Google OAuth2. The `userId` is equivalent to the Firebase Authentication `uid`.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The Firebase Authentication user ID."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/roles/{roleId}",
-        "definition": {
-          "entityName": "Role",
-          "schema": {
-            "$ref": "#/backend/entities/Role"
-          },
-          "description": "Stores role definitions (e.g., User, TechLead, Admin).  Authorization rules will check for the existence of a user's `roleId` in this collection.",
-          "params": [
-            {
-              "name": "roleId",
-              "description": "The unique identifier for the role."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/departments/{departmentId}",
-        "definition": {
-          "entityName": "Department",
-          "schema": {
-            "$ref": "#/backend/entities/Department"
-          },
-          "description": "Stores department definitions.",
-          "params": [
-            {
-              "name": "departmentId",
-              "description": "The unique identifier for the department."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/accessRequests/{accessRequestId}",
-        "definition": {
-          "entityName": "AccessRequest",
-          "schema": {
-            "$ref": "#/backend/entities/AccessRequest"
-          },
-          "description": "Stores access requests submitted by users. Includes denormalized `userId` for simplified ownership-based security rules.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The Firebase Authentication user ID of the user who created the request."
-            },
-            {
-              "name": "accessRequestId",
-              "description": "The unique identifier for the access request."
-            }
-          ]
-        }
-      }
-    ],
-    "reasoning": "This Firestore structure prioritizes security and scalability for the AccessFlow application. It leverages denormalization and structural segregation to ensure Authorization Independence and support secure list operations (QAPs). User authentication will be handled by Google OAuth2, and the user's `uid` will be used for authorization, aligning with DBAC principles (Database-Based Access Control). \n\nThe core design follows these principles:\n\n1.  **Authorization Independence:** The structure avoids hierarchical authorization dependencies by denormalizing relevant authorization data (like role or department membership) directly into the documents where it's needed. For example, the `AccessRequest` documents could include a denormalized `departmentId` field, derived from the user who created it, to allow department-level access rules without needing to `get()` the User document.\n\n2.  **Clarity of Intent:** The path structure clearly reflects the ownership and relationships between entities. For example, access requests are stored under `/users/{userId}/accessRequests/{accessRequestId}`, clearly indicating ownership.\n\n3.  **DBAC (No Custom Claims):** Authorization relies solely on the `request.auth.uid`, eliminating the need for custom claims. Roles are stored in the `roles` collection, and their existence is checked in security rules.\n\n4.  **QAPs (Rules are not Filters):** Structural segregation ensures that list operations are secure. For example, there is no need to apply complex filtering logic in rules because different types of data (e.g., public vs. private) are stored in separate collections.\n\n5.  **Invariants:** The structure supports data integrity by enforcing ownership (via path-based ownership) and providing predictable schemas."
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles. The {userId} corresponds to the Firebase Auth UID."
+    },
+    "/departments/{departmentId}": {
+      "schema": { "$ref": "#/entities/Department" },
+      "description": "Stores department (group) information."
+    },
+    "/accessRequests/{accessRequestId}": {
+      "schema": { "$ref": "#/entities/AccessRequest" },
+      "description": "Stores all access requests from all users."
+    }
   }
 }

@@ -1,104 +1,60 @@
-/**
- * @fileoverview Firestore Security Rules for AccessFlow application.
- *
- * Core Philosophy:
- * This ruleset enforces a strict user-ownership model combined with role-based access control.
- * User documents and their related data (e.g., access requests) are primarily accessible only to the owning user.
- * Access to Roles and Departments is public for `get` and `list` operations, as these are considered lookup tables.
- *
- * Data Structure:
- * - /users/{userId}: Stores user profiles.  `userId` MUST match the Firebase auth `uid`.
- * - /roles/{roleId}: Stores role definitions. Publicly readable.
- * - /departments/{departmentId}: Stores department definitions. Publicly readable.
- * - /users/{userId}/accessRequests/{accessRequestId}: Stores access requests created by a user. `userId` in the path MUST match the `userId` field in the document.
- *
- * Key Security Decisions:
- * - User listing is disallowed.
- * - Roles and Departments are publicly readable to allow for UI rendering of dropdowns.
- * - Authorization relies solely on `request.auth.uid` and document ownership; custom claims are not used.
- *
- * Denormalization for Authorization:
- * - AccessRequest documents should ideally include a denormalized `departmentId` (copied from the user's profile) to enable department-level access rules if needed in the future.
- */
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * @description Secure user profiles. Only the authenticated user can read/write their own profile.
-     * @path /users/{userId}
-     * @allow (create) User with UID 'user123' can create their profile if request.auth.uid == 'user123' and the document ID matches.
-     * @allow (get, update, delete) User with UID 'user123' can read/write their own profile.
-     * @deny (create) User with UID 'user456' cannot create a profile for 'user123'.
-     * @deny (get, update, delete) User with UID 'user456' cannot read/write profile 'user123'.
-     * @principle Enforces document ownership; users can only manage their own data.
-     */
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function getUserRole(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    }
+    
+    function isUserInRole(userId, roles) {
+      return getUserRole(userId) in roles;
+    }
+
+    // Users can only read their own profile.
+    // An admin can read/write any user profile.
     match /users/{userId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+      allow read: if isSignedIn() && (isOwner(userId) || isUserInRole(request.auth.uid, ['Admin']));
+      // New users can create their own profile. Admin can update any profile. Owner can update their own.
+      allow write: if isSignedIn() && ((request.method == 'create' && isOwner(userId)) || isUserInRole(request.auth.uid, ['Admin']) || (isOwner(userId) && request.method != 'create'));
     }
 
-    /**
-     * @description Secure role definitions. Roles are publicly readable.
-     * @path /roles/{roleId}
-     * @allow (get, list) Any user can read roles.
-     * @deny (create, update, delete) No one can create, update, or delete roles through the client.  These should be managed via a backend admin interface.
-     * @principle Roles are treated as public lookup data.
-     */
-    match /roles/{roleId} {
-      allow get, list: if true;
-      allow create, update, delete: if false;
-    }
-
-    /**
-     * @description Secure department definitions. Departments are publicly readable.
-     * @path /departments/{departmentId}
-     * @allow (get, list) Any user can read departments.
-     * @deny (create, update, delete) No one can create, update, or delete departments through the client.  These should be managed via a backend admin interface.
-     * @principle Departments are treated as public lookup data.
-     */
+    // Departments are public for authenticated users. Only Admins can modify them.
     match /departments/{departmentId} {
-      allow get, list: if true;
-      allow create, update, delete: if false;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
     }
 
-    /**
-     * @description Secure access requests under a user's profile. Only the owning user can manage their own requests.
-     * @path /users/{userId}/accessRequests/{accessRequestId}
-     * @allow (create) User with UID 'user123' can create a request under their profile if request.auth.uid == 'user123'.
-     * @allow (get, list, update, delete) User with UID 'user123' can read/write requests under their own profile.
-     * @deny (create) User with UID 'user456' cannot create a request under user 'user123'.
-     * @deny (get, list, update, delete) User with UID 'user456' cannot read/write requests under user 'user123'.
-     * @principle Enforces document ownership for access requests.
-     */
-    match /users/{userId}/accessRequests/{accessRequestId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.userId == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
-      allow delete: if isExistingOwner(userId);
+    // Access Requests
+    match /accessRequests/{accessRequestId} {
+      // Create: Any authenticated user can create a request for themselves.
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+
+      // Read: Users can read their own requests. TechLeads can read requests for their department. Admins can read all.
+      allow read: if isSignedIn() && 
+                    (resource.data.userId == request.auth.uid || 
+                     isUserInRole(request.auth.uid, ['Admin']) ||
+                     (isUserInRole(request.auth.uid, ['TechLead']) && resource.data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId));
+
+      // Update: 
+      // - Owners can't update.
+      // - TechLeads can update status for their department's requests.
+      // - Admins can update any request.
+      allow update: if isSignedIn() && 
+                      (isUserInRole(request.auth.uid, ['Admin']) ||
+                      (isUserInRole(request.auth.uid, ['TechLead']) && request.resource.data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId));
+                      
+      // Delete: Only admins can delete requests.
+      allow delete: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
     }
   }
 }
