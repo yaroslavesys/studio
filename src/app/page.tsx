@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { useFirebase } from '@/firebase';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -36,21 +36,11 @@ export default function LoginPage() {
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
     try {
-      const result = await signInWithPopup(auth, provider);
-      const emailDomain = result.user.email?.split('@')[1];
-
-      if (!emailDomain || !ALLOWED_DOMAINS.includes(emailDomain)) {
-         await auth.signOut();
-         toast({
-            variant: "destructive",
-            title: "Access Denied",
-            description: "Your email domain is not authorized for access.",
-         });
-         setIsSigningIn(false);
-         return;
-      }
-      // On successful sign-in, redirect to the dashboard
-      router.push('/dashboard');
+      // Using signInWithRedirect for a more robust sign-in flow
+      await signInWithRedirect(auth, provider);
+      // The page will redirect to Google, and then back to this page.
+      // The onAuthStateChanged listener in FirebaseProvider will handle the user
+      // session and redirect to the dashboard if successful.
     } catch (error) {
       console.error('Error signing in with Google: ', error);
        toast({
@@ -58,10 +48,28 @@ export default function LoginPage() {
         title: "Sign-in Failed",
         description: "An error occurred during the sign-in process.",
       });
-    } finally {
-        setIsSigningIn(false);
-    }
+      setIsSigningIn(false);
+    } 
   };
+  
+    // Effect to handle redirection after successful sign-in
+  useEffect(() => {
+    if (!isUserLoading && user) {
+        const emailDomain = user.email?.split('@')[1];
+        if (emailDomain && ALLOWED_DOMAINS.includes(emailDomain)) {
+            router.push('/dashboard');
+        } else {
+            // This case handles if a user signs in with an unallowed domain
+            // after a redirect flow.
+            auth?.signOut();
+            toast({
+                variant: "destructive",
+                title: "Access Denied",
+                description: "Your email domain is not authorized for access.",
+            });
+        }
+    }
+  }, [user, isUserLoading, router, auth, toast]);
 
   const isLoading = isUserLoading || isSigningIn;
 
