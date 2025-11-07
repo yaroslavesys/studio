@@ -36,10 +36,8 @@ export default function LoginPage() {
     try {
       const result = await signInWithPopup(auth, provider);
       const emailDomain = result.user.email?.split('@')[1];
-      
-      const isAdmin = result.user.email === 'yaroslav_system.admin@trafficdevils.net';
 
-      if (!isAdmin && (!emailDomain || !ALLOWED_DOMAINS.includes(emailDomain))) {
+      if (!emailDomain || !ALLOWED_DOMAINS.includes(emailDomain)) {
          await auth.signOut();
          toast({
             variant: "destructive",

@@ -29,9 +29,9 @@ let departmentsSeed: Department[] = [
 
 let usersSeed: Omit<User, 'avatarUrl'>[] = [
     {
-        id: 'user-1-admin', // Placeholder, will be updated to actual auth UID
-        name: 'Yaroslav Admin',
-        email: 'yaroslav_system.admin@trafficdevils.net',
+        id: 'user-1-admin', // This ID is a placeholder for the seed data only
+        name: 'Default Admin',
+        email: 'admin@example.com', // Placeholder email
         avatarId: 'avatar1',
         role: 'Admin',
         departmentId: 'dept-1',
@@ -231,41 +231,44 @@ export const updateUserRoleInDb = (db: Firestore, id: string, role: UserRole) =>
 export const createUserProfile = async (db: Firestore, user: import('firebase/auth').User) => {
     const userRef = doc(db, 'users', user.uid);
     const userDoc = await getDoc(userRef);
+
+    // If user document already exists, return it
+    if (userDoc.exists()) {
+        const userData = userDoc.data() as Omit<User, 'avatarUrl'>;
+        const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
+        return { ...userData, id: userDoc.id, avatarUrl: imageMap.get(userData.avatarId) || '' };
+    }
+
+    // If user document doesn't exist, create it
     const usersQuery = query(collection(db, 'users'));
     const usersSnapshot = await getDocs(usersQuery);
-    const usersCount = usersSnapshot.size;
+    const isFirstUser = usersSnapshot.empty;
 
     const departmentsQuery = query(collection(db, 'departments'));
     const deptsSnapshot = await getDocs(departmentsQuery);
     const allDepts = deptsSnapshot.docs.map(d => ({...d.data(), id: d.id})) as Department[];
 
-    // If user document doesn't exist, create it
-    if (!userDoc.exists()) {
-        const newUser: Omit<User, 'avatarUrl'> = {
-            id: user.uid,
-            name: user.displayName || 'New User',
-            email: user.email!,
-            avatarId: `avatar${(usersCount % 5) + 1}`,
-            role: user.email === 'yaroslav_system.admin@trafficdevils.net' ? 'Admin' : 'User',
-            departmentId: allDepts.length > 0 ? allDepts[0].id : '',
-        };
-        
-        await setDoc(userRef, newUser).catch(async (error) => {
-            const contextualError = await FirestorePermissionError.create({
-                path: userRef.path,
-                operation: 'create',
-                requestResourceData: newUser
-            });
-            errorEmitter.emit('permission-error', contextualError);
+    const newUser: Omit<User, 'avatarUrl'> = {
+        id: user.uid,
+        name: user.displayName || 'New User',
+        email: user.email!,
+        avatarId: `avatar${(usersSnapshot.size % 5) + 1}`,
+        // The very first user to sign in becomes the Admin
+        role: isFirstUser ? 'Admin' : 'User',
+        departmentId: allDepts.length > 0 ? allDepts[0].id : '',
+    };
+    
+    await setDoc(userRef, newUser).catch(async (error) => {
+        const contextualError = await FirestorePermissionError.create({
+            path: userRef.path,
+            operation: 'create',
+            requestResourceData: newUser
         });
-        
-        const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
-        return { ...newUser, avatarUrl: imageMap.get(newUser.avatarId) || '' };
-    } else {
-        const userData = userDoc.data() as Omit<User, 'avatarUrl'>;
-        const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
-        return { ...userData, id: userDoc.id, avatarUrl: imageMap.get(userData.avatarId) || '' };
-    }
+        errorEmitter.emit('permission-error', contextualError);
+    });
+    
+    const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
+    return { ...newUser, avatarUrl: imageMap.get(newUser.avatarId) || '' };
 };
 
 // This function can be called on first load to seed data if necessary
