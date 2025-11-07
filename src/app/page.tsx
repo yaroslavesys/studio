@@ -10,8 +10,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { useFirebase } from '@/firebase';
-import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
-import { useState } from 'react';
+import { GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -21,26 +21,43 @@ export default function LoginPage() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (auth) {
+      setIsSigningIn(true);
+      getRedirectResult(auth)
+        .then((result) => {
+          if (result && result.user) {
+            router.push('/dashboard');
+          }
+          setIsSigningIn(false);
+        })
+        .catch((error) => {
+          console.error('Error getting redirect result:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Sign-in Failed',
+            description: 'Could not complete sign-in. Please try again.',
+          });
+          setIsSigningIn(false);
+        });
+    }
+  }, [auth, router, toast]);
+
   const handleSignIn = async () => {
     if (!auth) return;
 
-    // Если пользователь уже вошел в систему, просто перейдите на панель управления.
     if (user) {
         router.push('/dashboard');
         return;
     }
 
-    // Если пользователь не вошел в систему, начните процесс входа.
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
-    // Добавьте пользовательские параметры, чтобы пользователь всегда должен был выбирать учетную запись.
     provider.setCustomParameters({
       prompt: 'select_account',
     });
     try {
       await signInWithRedirect(auth, provider);
-      // Страница будет перенаправлена на Google, а затем обратно.
-      // Эффект useEffect обработает результат.
     } catch (error) {
       console.error('Error starting sign-in redirect: ', error);
        toast({
