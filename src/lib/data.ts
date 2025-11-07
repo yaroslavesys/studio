@@ -156,7 +156,7 @@ export async function seedDatabase(db: Firestore) {
 
 // --- Data Manipulation Functions ---
 
-export const addAccessRequest = (
+export const addAccessRequest = async (
   db: Firestore,
   data: { title: string; description: string; requestType: RequestType },
   userId: string,
@@ -172,17 +172,19 @@ export const addAccessRequest = (
     updatedAt: serverTimestamp(),
   };
 
-  addDoc(colRef, newRequest).catch(async (error) => {
+  try {
+    await addDoc(colRef, newRequest);
+  } catch (error) {
     const contextualError = await FirestorePermissionError.create({
       path: colRef.path,
       operation: 'create',
       requestResourceData: newRequest
     });
     errorEmitter.emit('permission-error', contextualError);
-  });
+  }
 };
 
-export const updateRequestStatus = (db: Firestore, id: string, status: RequestStatus, techLeadComment?: string) => {
+export const updateRequestStatus = async (db: Firestore, id: string, status: RequestStatus, techLeadComment?: string) => {
   const docRef = doc(db, 'accessRequests', id);
   const updateData: any = {
     status,
@@ -193,38 +195,44 @@ export const updateRequestStatus = (db: Firestore, id: string, status: RequestSt
     updateData.techLeadComment = techLeadComment;
   }
   
-  updateDoc(docRef, updateData).catch(async (error) => {
+  try {
+    await updateDoc(docRef, updateData)
+  } catch (error) {
     const contextualError = await FirestorePermissionError.create({
       path: docRef.path,
       operation: 'update',
       requestResourceData: updateData
     });
     errorEmitter.emit('permission-error', contextualError);
-  });
+  }
 };
 
-export const deleteRequestById = (db: Firestore, id: string) => {
+export const deleteRequestById = async (db: Firestore, id: string) => {
   const docRef = doc(db, 'accessRequests', id);
-  deleteDoc(docRef).catch(async (error) => {
+  try {
+    await deleteDoc(docRef)
+  } catch (error) {
     const contextualError = await FirestorePermissionError.create({
       path: docRef.path,
       operation: 'delete'
     });
     errorEmitter.emit('permission-error', contextualError);
-  });
+  }
 };
 
-export const updateUserRoleInDb = (db: Firestore, id: string, role: UserRole) => {
+export const updateUserRoleInDb = async (db: Firestore, id: string, role: UserRole) => {
   const docRef = doc(db, 'users', id);
   const updateData = { role, updatedAt: serverTimestamp() };
-  updateDoc(docRef, updateData).catch(async (error) => {
+  try {
+    await updateDoc(docRef, updateData)
+  } catch (error) {
      const contextualError = await FirestorePermissionError.create({
       path: docRef.path,
       operation: 'update',
       requestResourceData: { role }
     });
     errorEmitter.emit('permission-error', contextualError);
-  });
+  }
 };
 
 // --- This function is to create a user document in Firestore the first time they log in ---
@@ -248,6 +256,9 @@ export const createUserProfile = async (db: Firestore, user: import('firebase/au
     const deptsSnapshot = await getDocs(departmentsQuery);
     const allDepts = deptsSnapshot.docs.map(d => ({...d.data(), id: d.id})) as Department[];
 
+    // Assign a default department if one exists, otherwise an empty string.
+    const defaultDept = allDepts.find(d => d.name === 'Engineering') || allDepts[0];
+
     const newUser: Omit<User, 'avatarUrl'> = {
         id: user.uid,
         name: user.displayName || 'New User',
@@ -255,7 +266,7 @@ export const createUserProfile = async (db: Firestore, user: import('firebase/au
         avatarId: `avatar${(usersSnapshot.size % 5) + 1}`,
         // The very first user to sign in becomes the Admin
         role: isFirstUser ? 'Admin' : 'User',
-        departmentId: allDepts.length > 0 ? allDepts[0].id : '',
+        departmentId: defaultDept ? defaultDept.id : '',
     };
     
     try {

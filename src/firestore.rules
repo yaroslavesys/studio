@@ -1,0 +1,83 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return request.auth.token.role == 'Admin';
+    }
+
+    function isTechLead() {
+        return request.auth.token.role == 'TechLead';
+    }
+    
+    function isUser() {
+        return request.auth.token.role == 'User';
+    }
+
+    match /users/{userId} {
+      // Admins can read the whole collection.
+      allow list: if isSignedIn() && isAdmin();
+      
+      // Any signed in user can read any single user profile.
+      // This is required for components to map user IDs to names.
+      allow get: if isSignedIn();
+      
+      // Users can create their own document.
+      allow create: if isSignedIn() && isOwner(userId);
+
+      // Users can update their own document. Admins can update any.
+      allow update: if isSignedIn() && (isOwner(userId) || isAdmin());
+
+      // No one can delete user documents for now.
+      allow delete: if false;
+    }
+
+    match /departments/{departmentId} {
+      // Any signed-in user can read the department list.
+      allow read: if isSignedIn();
+      // Only admins can create, update, or delete departments.
+      allow write: if isSignedIn() && isAdmin();
+    }
+
+    match /accessRequests/{accessRequestId} {
+      // Users can create requests for themselves.
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+
+      // Admins can list all requests.
+      // TechLeads can query requests only for their own department.
+      allow list: if isSignedIn() && (isAdmin() || (isTechLead() && request.query.get('departmentId') == request.auth.token.departmentId));
+      
+      // Users can read their own requests.
+      // TechLeads can read requests in their department.
+      // Admins can read any request.
+      allow get: if isSignedIn() && 
+                    (resource.data.userId == request.auth.uid ||
+                     (isTechLead() && resource.data.departmentId == request.auth.token.departmentId) ||
+                     isAdmin());
+      
+      // TechLeads can update requests in their department (e.g., to approve/reject).
+      // Admins can update any request.
+      // Users cannot update their requests after submission.
+      allow update: if isSignedIn() && 
+                     ((isTechLead() && get(/databases/$(database)/documents/accessRequests/$(accessRequestId)).data.departmentId == request.auth.token.departmentId) || isAdmin());
+
+      // Only admins can delete requests.
+      allow delete: if isSignedIn() && isAdmin();
+    }
+    
+    // This collection is used for seeding metadata. Only allow read access.
+    match /meta/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+  }
+}
