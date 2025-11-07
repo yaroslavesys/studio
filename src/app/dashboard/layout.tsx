@@ -107,7 +107,7 @@ export default function DashboardLayout({
         };
         console.log("New user created (locally for demo):", newUser);
         setRealAppUser(newUser);
-        setAllUsers(prev => [...prev, newUser]);
+        // Do not add the new user to `allUsers` here, it will be handled by re-fetch logic
       }
       setIsDataLoading(false);
     };
