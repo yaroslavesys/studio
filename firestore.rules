@@ -20,10 +20,11 @@ service cloud.firestore {
       return getUserRole(userId) in roles;
     }
 
+    // Admins can list all users.
     // Users can only read their own profile.
-    // An admin can read/write any user profile.
     match /users/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isUserInRole(request.auth.uid, ['Admin']));
+      allow list: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
+      allow get: if isSignedIn() && (isOwner(userId) || isUserInRole(request.auth.uid, ['Admin']));
       // New users can create their own profile. Admin can update any profile. Owner can update their own.
       allow write: if isSignedIn() && ((request.method == 'create' && isOwner(userId)) || isUserInRole(request.auth.uid, ['Admin']) || (isOwner(userId) && request.method != 'create'));
     }
@@ -31,7 +32,7 @@ service cloud.firestore {
     // Departments are public for authenticated users. Only Admins can modify them.
     match /departments/{departmentId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && isUserInRole(request.auth.uid, ['Admin']);
+      allow write: if isSignedIn() && isUserInrolE(request.auth.uid, ['Admin']);
     }
 
     // Access Requests
