@@ -29,6 +29,7 @@ import { useTransition } from 'react';
 import { CheckCircle, XCircle, MoreVertical, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { SafeDate } from '@/components/safe-date';
 
 const statusStyles: Record<RequestStatus, string> = {
   Pending: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
@@ -93,7 +94,9 @@ export function RequestsTable({
                     {user.role !== 'User' && <TableCell className="font-medium">{request.userName}</TableCell>}
                     <TableCell className="max-w-[250px] truncate">{request.title}</TableCell>
                     <TableCell>{request.requestType}</TableCell>
-                    <TableCell>{new Date(request.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <SafeDate dateString={request.createdAt} />
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={cn('font-semibold', statusStyles[request.status])}>
                         {request.status}
