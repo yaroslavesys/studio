@@ -11,26 +11,34 @@ service cloud.firestore {
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
+    
+    function getRole(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    }
+    
+    function getRequestingUserRole() {
+      return getRole(request.auth.uid);
+    }
 
     // --- Rules ---
 
     // USERS
     match /users/{userId} {
       // List: Only Admins can list all users. This relies on the client query being correct.
-      // This rule only checks if the requesting user's document has the Admin role.
-      allow list: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+      // The rule checks if the *requesting user's* document has the Admin role.
+      allow list: if isSignedIn() && getRequestingUserRole() == 'Admin';
       
-      // Get: Users can get their own doc. TechLeads and Admins can get any user within their query scope.
-      // The security is enforced by the query in the client code.
+      // Get: Any signed-in user can get any user doc. This is needed to resolve user names from IDs.
       allow get: if isSignedIn();
       
       // Create: Any authenticated user can create THEIR OWN user document.
+      // This is crucial for the first sign-in.
       allow create: if isSignedIn() && isOwner(userId);
 
       // Update: Users can update their own doc. Admins can update any.
-      allow update: if isSignedIn() && (isOwner(userId) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin');
+      allow update: if isSignedIn() && (isOwner(userId) || getRequestingUserRole() == 'Admin');
 
-      // Delete: Not allowed for now.
+      // Delete: Not allowed for now to prevent accidental data loss.
       allow delete: if false;
     }
 
@@ -38,7 +46,7 @@ service cloud.firestore {
     // Any signed-in user can read departments. Only Admins can write.
     match /departments/{departmentId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+      allow write: if isSignedIn() && getRequestingUserRole() == 'Admin';
     }
 
     // ACCESS REQUESTS
@@ -46,23 +54,25 @@ service cloud.firestore {
       // Create: Users can create requests for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
-      // List: Only Admins can list all requests.
-      allow list: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
-      
-      // Query: TechLeads can query requests for their department.
-      allow list: if isSignedIn() 
-                  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TechLead'
-                  && request.query.limit <= 100 // Add a reasonable limit
-                  && request.query.get('departmentId') == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId;
+      // List(Query): 
+      // - Admins can list all requests.
+      // - TechLeads can query requests for their department.
+      // - Users can query their own requests.
+      // The client-side code is responsible for building the correct query. These rules enforce it.
+      allow list: if isSignedIn() && (
+        getRequestingUserRole() == 'Admin' ||
+        (getRequestingUserRole() == 'TechLead' && request.query.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId) ||
+        (request.query.userId == request.auth.uid)
+      );
 
       // Read (Get):
-      // - Admins can read all requests. (covered by list)
-      // - TechLeads can read requests for their department.
       // - Users can read their own requests.
+      // - TechLeads can read requests for their department.
+      // - Admins can read all requests.
       allow get: if isSignedIn() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin' ||
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TechLead' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId == resource.data.departmentId) ||
-        resource.data.userId == request.auth.uid
+        resource.data.userId == request.auth.uid ||
+        (getRequestingUserRole() == 'TechLead' && resource.data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId) ||
+        getRequestingUserRole() == 'Admin'
       );
       
       // Update:
@@ -70,12 +80,17 @@ service cloud.firestore {
       // - Admins can update any request.
       // - Users cannot update their own requests once submitted.
       allow update: if isSignedIn() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin' ||
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TechLead' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId == request.resource.data.departmentId)
+         getRequestingUserRole() == 'Admin' ||
+        (getRequestingUserRole() == 'TechLead' && get(/databases/$(database)/documents/accessRequests/$(accessRequestId)).data.departmentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId)
       );
                       
       // Delete: Only admins can delete.
-      allow delete: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+      allow delete: if isSignedIn() && getRequestingUserRole() == 'Admin';
+    }
+    
+    // Meta collection for seeding info
+    match /meta/{docId} {
+        allow read, write: if true; // Allow anyone to read/write for seeding purposes.
     }
   }
 }

@@ -27,17 +27,17 @@ let departmentsSeed: Department[] = [
   { id: 'dept-3', name: 'Human Resources' },
 ];
 
-let usersSeed: Omit<User, 'avatarUrl'>[] = [
+// IMPORTANT: The `id` here is just a placeholder for seeding.
+// The actual user document ID will be the Firebase Auth UID.
+let usersSeed: Omit<User, 'avatarUrl' | 'id'>[] = [
     {
-        id: 'user-1-admin', // This ID is a placeholder for the seed data only
         name: 'Default Admin',
-        email: 'admin@example.com', // Placeholder email
+        email: 'admin@example.com', // This will be overwritten by the first user who signs in.
         avatarId: 'avatar1',
         role: 'Admin',
         departmentId: 'dept-1',
     },
     {
-        id: 'user-2-lead',
         name: 'Maria Garcia',
         email: 'maria.g@trafficdevils.net',
         avatarId: 'avatar2',
@@ -45,7 +45,6 @@ let usersSeed: Omit<User, 'avatarUrl'>[] = [
         departmentId: 'dept-1',
     },
     {
-        id: 'user-3-user',
         name: 'Sam Williams',
         email: 'sam.w@trafficdevils.net',
         avatarId: 'avatar3',
@@ -53,7 +52,6 @@ let usersSeed: Omit<User, 'avatarUrl'>[] = [
         departmentId: 'dept-1',
     },
      {
-        id: 'user-4-lead',
         name: 'Casey Lee',
         email: 'casey.l@newdevils.net',
         avatarId: 'avatar4',
@@ -61,7 +59,6 @@ let usersSeed: Omit<User, 'avatarUrl'>[] = [
         departmentId: 'dept-2',
     },
      {
-        id: 'user-5-user',
         name: 'Jordan Smith',
         email: 'jordan.s@newdevils.net',
         avatarId: 'avatar5',
@@ -70,13 +67,12 @@ let usersSeed: Omit<User, 'avatarUrl'>[] = [
     },
 ];
 
-let accessRequestsSeed: Omit<AccessRequest, 'id' | 'createdAt' | 'updatedAt'>[] = [
+let accessRequestsSeed: Omit<AccessRequest, 'id' | 'createdAt' | 'updatedAt' | 'userId'>[] = [
     {
         title: 'Access to Production Database',
         description: 'Need read-only access to the production database for debugging purposes.',
         requestType: 'Data',
         status: 'Pending',
-        userId: 'user-3-user',
         departmentId: 'dept-1',
     },
     {
@@ -84,7 +80,6 @@ let accessRequestsSeed: Omit<AccessRequest, 'id' | 'createdAt' | 'updatedAt'>[] 
         description: 'Requesting admin rights on staging for new feature deployment testing.',
         requestType: 'System',
         status: 'Approved',
-        userId: 'user-3-user',
         departmentId: 'dept-1',
     },
     {
@@ -92,7 +87,6 @@ let accessRequestsSeed: Omit<AccessRequest, 'id' | 'createdAt' | 'updatedAt'>[] 
         description: 'Need access to our new marketing analytics platform to track campaign performance.',
         requestType: 'Other',
         status: 'Pending',
-        userId: 'user-5-user',
         departmentId: 'dept-2',
     },
      {
@@ -100,7 +94,6 @@ let accessRequestsSeed: Omit<AccessRequest, 'id' | 'createdAt' | 'updatedAt'>[] 
         description: 'I need to push my latest changes for the upcoming release.',
         requestType: 'System',
         status: 'Rejected',
-        userId: 'user-3-user',
         departmentId: 'dept-1',
     },
 ];
@@ -109,7 +102,7 @@ let accessRequestsSeed: Omit<AccessRequest, 'id' | 'createdAt' | 'updatedAt'>[] 
 export async function seedDatabase(db: Firestore) {
     console.log("Checking if seeding is needed...");
 
-    const checkDocRef = doc(db, 'meta', 'seeded');
+    const checkDocRef = doc(db, 'meta', 'isSeeded');
     const checkDoc = await getDoc(checkDocRef);
 
     if (checkDoc.exists() && checkDoc.data().done) {
@@ -120,30 +113,28 @@ export async function seedDatabase(db: Firestore) {
     console.log("Seeding database...");
     const batch = writeBatch(db);
 
-    // Seed departments
     departmentsSeed.forEach(dept => {
         const docRef = doc(db, 'departments', dept.id);
         batch.set(docRef, dept);
     });
 
-    // Seed users
-    usersSeed.forEach(user => {
-        const docRef = doc(db, 'users', user.id);
-        batch.set(docRef, user);
-    });
+    // We don't seed users anymore, as they are created on first login.
     
-    // Seed requests
+    // We can't seed requests without user IDs. This part needs to be adjusted or removed if requests are tied to dynamic users.
+    // For now, we'll comment it out to avoid errors.
+    /*
     accessRequestsSeed.forEach(req => {
         const docRef = doc(collection(db, 'accessRequests'));
         batch.set(docRef, { 
             ...req, 
+            userId: 'placeholder-user-id', // This needs a real user ID
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
     });
+    */
 
-    // Mark seeding as done
-    batch.set(checkDocRef, { done: true });
+    batch.set(checkDocRef, { done: true, seededAt: serverTimestamp() });
 
     try {
         await batch.commit();
@@ -222,7 +213,7 @@ export const deleteRequestById = async (db: Firestore, id: string) => {
 
 export const updateUserRoleInDb = async (db: Firestore, id: string, role: UserRole) => {
   const docRef = doc(db, 'users', id);
-  const updateData = { role, updatedAt: serverTimestamp() };
+  const updateData = { role };
   try {
     await updateDoc(docRef, updateData)
   } catch (error) {
@@ -236,7 +227,7 @@ export const updateUserRoleInDb = async (db: Firestore, id: string, role: UserRo
 };
 
 // --- This function is to create a user document in Firestore the first time they log in ---
-export const createUserProfile = async (db: Firestore, user: import('firebase/auth').User) => {
+export const createUserProfile = async (db: Firestore, user: import('firebase/auth').User): Promise<User & { avatarUrl: string }> => {
     const userRef = doc(db, 'users', user.uid);
     const userDoc = await getDoc(userRef);
 
@@ -250,6 +241,7 @@ export const createUserProfile = async (db: Firestore, user: import('firebase/au
     // If user document doesn't exist, create it
     const usersQuery = query(collection(db, 'users'));
     const usersSnapshot = await getDocs(usersQuery);
+    // The very first user to sign in becomes the Admin
     const isFirstUser = usersSnapshot.empty;
 
     const departmentsQuery = query(collection(db, 'departments'));
@@ -257,14 +249,13 @@ export const createUserProfile = async (db: Firestore, user: import('firebase/au
     const allDepts = deptsSnapshot.docs.map(d => ({...d.data(), id: d.id})) as Department[];
 
     // Assign a default department if one exists, otherwise an empty string.
-    const defaultDept = allDepts.find(d => d.name === 'Engineering') || allDepts[0];
+    const defaultDept = allDepts.find(d => d.name === 'Engineering') || (allDepts.length > 0 ? allDepts[0] : null);
 
     const newUser: Omit<User, 'avatarUrl'> = {
         id: user.uid,
         name: user.displayName || 'New User',
         email: user.email!,
         avatarId: `avatar${(usersSnapshot.size % 5) + 1}`,
-        // The very first user to sign in becomes the Admin
         role: isFirstUser ? 'Admin' : 'User',
         departmentId: defaultDept ? defaultDept.id : '',
     };
@@ -278,8 +269,7 @@ export const createUserProfile = async (db: Firestore, user: import('firebase/au
             requestResourceData: newUser
         });
         errorEmitter.emit('permission-error', contextualError);
-        // Re-throw or handle as needed, for now we just emit
-        throw contextualError;
+        throw contextualError; // Re-throw to indicate failure
     }
     
     const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
@@ -287,16 +277,21 @@ export const createUserProfile = async (db: Firestore, user: import('firebase/au
 };
 
 // This function can be called on first load to seed data if necessary
-// Be careful with this in production environments
 export const checkAndSeedDatabase = async (db: Firestore) => {
     const metaDocRef = doc(db, 'meta', 'isSeeded');
-    const docSnap = await getDoc(metaDocRef);
+    try {
+        const docSnap = await getDoc(metaDocRef);
 
-    if (!docSnap.exists()) {
-        console.log("Seeding database for the first time...");
+        if (!docSnap.exists()) {
+            console.log("Seeding database for the first time...");
+            await seedDatabase(db);
+            console.log("Seeding complete.");
+        }
+    } catch (e) {
+        // This might fail if rules prevent reading 'meta' collection initially.
+        // We can assume if it fails, it's not seeded and proceed.
+        console.warn("Could not check for seeding status, assuming seeding is needed.", e);
         await seedDatabase(db);
         console.log("Seeding complete.");
-    } else {
-        console.log("Database already seeded.");
     }
 }

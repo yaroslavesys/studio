@@ -16,7 +16,7 @@ import {
 import { UserNav } from '@/components/auth/user-nav';
 import { LayoutDashboard, Shield, Eye } from 'lucide-react';
 import { Logo } from '@/components/logo';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirebase, useCollection, useDoc, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import type { User, Department, AccessRequest, UserRole } from '@/lib/types';
 import { createUserProfile, checkAndSeedDatabase } from '@/lib/data';
@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, doc } from 'firebase/firestore';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 interface DashboardContextProps {
@@ -56,122 +56,144 @@ export default function DashboardLayout({
 }) {
   const { firestore, user: firebaseUser, isUserLoading } = useFirebase();
   const router = useRouter();
-  
-  const [realAppUser, setRealAppUser] = useState<(User & { avatarUrl: string }) | null>(null);
-  const [impersonatedRole, setImpersonatedRole] = useState<UserRole | null>(null);
-  const [isDataLoading, setIsDataLoading] = useState(true);
 
-  // --- App User Derivation ---
+  const [impersonatedRole, setImpersonatedRole] = useState<UserRole | null>(null);
+  
+  // 1. Fetch the current user's profile from Firestore
+  const userDocRef = useMemoFirebase(() => {
+    if (!firestore || !firebaseUser) return null;
+    return doc(firestore, 'users', firebaseUser.uid);
+  }, [firestore, firebaseUser]);
+  const { data: realAppUserFromDb, isLoading: isAppUserLoading } = useDoc<Omit<User, 'avatarUrl'>>(userDocRef);
+
+  // 2. Seed database and create profile if it doesn't exist
+  useEffect(() => {
+    const setupUser = async () => {
+      if (!firestore || !firebaseUser || isAppUserLoading) return;
+      
+      await checkAndSeedDatabase(firestore);
+
+      if (!realAppUserFromDb) {
+        try {
+          await createUserProfile(firestore, firebaseUser);
+          // No need to set state, useDoc will update automatically
+        } catch (error) {
+          console.error("Failed to create user profile:", error);
+          // Handle error, maybe sign out user
+        }
+      }
+    };
+    setupUser();
+  }, [firestore, firebaseUser, realAppUserFromDb, isAppUserLoading]);
+
+  // 3. Derive the user object, applying impersonation if active
+  const realAppUser = useMemo(() => {
+    if (!realAppUserFromDb) return null;
+    const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
+    return {
+      ...realAppUserFromDb,
+      avatarUrl: imageMap.get(realAppUserFromDb.avatarId) || '',
+    };
+  }, [realAppUserFromDb]);
+
   const appUser = useMemo(() => {
     if (!realAppUser) return null;
-    if (impersonatedRole) {
+    if (impersonatedRole && realAppUser.role === 'Admin') {
       return { ...realAppUser, role: impersonatedRole };
     }
     return realAppUser;
   }, [realAppUser, impersonatedRole]);
 
-  // --- Firestore Queries (now role-dependent) ---
+  // 4. Fetch all other data based on the derived user's role
   const departmentsQuery = useMemoFirebase(() => firestore ? collection(firestore, 'departments') : null, [firestore]);
   const { data: allDepartments, isLoading: deptsLoading } = useCollection<Department>(departmentsQuery);
 
   const usersQuery = useMemoFirebase(() => {
     if (!firestore || !appUser) return null;
-    // Admin can fetch all users. Other roles fetch based on their limited permissions.
-    // The security rules will enforce these limitations.
+    // Admin can fetch all users.
     if (appUser.role === 'Admin') {
       return collection(firestore, 'users');
     }
-    // A TechLead can only see users in their own department.
-    if (appUser.role === 'TechLead') {
-      return query(collection(firestore, 'users'), where('departmentId', '==', appUser.departmentId));
-    }
-    // A regular user can only fetch their own document.
-    return query(collection(firestore, 'users'), where('id', '==', appUser.id));
-    
+    // Non-admins cannot list all users due to security rules, so we don't even try.
+    // We fetch their own doc via useDoc, and if needed, other users can be fetched individually.
+    // For TechLeads, we'll fetch their department members on the pages that need it.
+    return null;
   }, [firestore, appUser]);
-  const { data: usersFromDb, isLoading: usersLoading } = useCollection<Omit<User, 'avatarUrl'>>(usersQuery);
+  const { data: allUsersFromDb, isLoading: usersLoading } = useCollection<Omit<User, 'avatarUrl'>>(usersQuery);
   
   const requestsQuery = useMemoFirebase(() => {
-     if (!firestore || !appUser) return null;
-      // Admin gets all requests.
-      if (appUser.role === 'Admin') {
-        return collection(firestore, 'accessRequests');
-      }
-      // TechLead gets requests for their department.
-      if (appUser.role === 'TechLead') {
-        return query(collection(firestore, 'accessRequests'), where('departmentId', '==', appUser.departmentId));
-      }
-      // User gets their own requests.
-      return query(collection(firestore, 'accessRequests'), where('userId', '==', appUser.id));
+    if (!firestore || !appUser) return null;
+    // Admin gets all requests.
+    if (appUser.role === 'Admin') {
+      return collection(firestore, 'accessRequests');
+    }
+    // TechLead gets requests for their department.
+    if (appUser.role === 'TechLead') {
+      return query(collection(firestore, 'accessRequests'), where('departmentId', '==', appUser.departmentId));
+    }
+    // User gets their own requests.
+    return query(collection(firestore, 'accessRequests'), where('userId', '==', appUser.id));
   }, [firestore, appUser]);
   const { data: allRequests, isLoading: requestsLoading } = useCollection<AccessRequest>(requestsQuery);
   
+  // This derived state now handles multiple scenarios for allUsers
   const allUsers = useMemo(() => {
-    if (!usersFromDb) return [];
     const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
-    return usersFromDb.map(user => ({
-      ...user,
-      avatarUrl: imageMap.get(user.avatarId) || '',
-    }));
-  }, [usersFromDb]);
-
-  useEffect(() => {
-    const authAndDataCheck = async () => {
-      if (isUserLoading || !firestore) {
-        return; 
-      }
-
-      if (!firebaseUser) {
-        router.push('/login');
-        return;
-      }
-      
-      await checkAndSeedDatabase(firestore);
-
-      setIsDataLoading(true);
-      
-      const userProfile = await createUserProfile(firestore, firebaseUser);
-      if (userProfile) {
-        setRealAppUser(userProfile);
-      } else {
-        console.error("Could not get or create user profile. Redirecting.");
-      }
-    };
     
-    authAndDataCheck();
+    // Admins get the full list from the 'allUsersFromDb' collection query
+    if (appUser?.role === 'Admin' && allUsersFromDb) {
+       return allUsersFromDb.map(user => ({
+        ...user,
+        avatarUrl: imageMap.get(user.avatarId) || '',
+      }));
+    }
 
-  }, [firebaseUser, isUserLoading, router, firestore]);
+    // For non-admins, 'allUsers' starts with just their own profile.
+    // Other components might add to this list if they fetch more user docs.
+    if (appUser) {
+        return [{ ...appUser }];
+    }
 
+    return [];
+  }, [allUsersFromDb, appUser]);
+
+  // Handle auth state redirects
   useEffect(() => {
-      // The dashboard is ready when auth is done, we have a user profile,
-      // and the initial queries for that user's role have completed.
-      if (!isUserLoading && appUser && !usersLoading && !deptsLoading && !requestsLoading) {
-        setIsDataLoading(false);
-      }
-  }, [isUserLoading, appUser, usersLoading, deptsLoading, requestsLoading]);
-  
+    if (!isUserLoading && !firebaseUser) {
+      router.push('/login');
+    }
+  }, [firebaseUser, isUserLoading, router]);
+
   const userDepartment = useMemo(() => {
     if (!appUser || !allDepartments || allDepartments.length === 0) return null;
     return allDepartments.find(d => d.id === appUser.departmentId);
   }, [appUser, allDepartments]);
 
-  const isLoading = isUserLoading || isDataLoading;
-  
+  const isDashboardLoading = isUserLoading || isAppUserLoading || (appUser?.role === 'Admin' && (usersLoading || requestsLoading));
+
+  if (isUserLoading || isAppUserLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Loading user profile...</p>
+      </div>
+    );
+  }
+
+  if (!appUser) {
+     return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Could not load user profile. Redirecting...</p>
+      </div>
+    );
+  }
+
   const contextValue: DashboardContextProps = {
       appUser,
       allUsers: allUsers || [],
       allDepartments: allDepartments || [],
       allRequests: allRequests || [],
-      isDashboardLoading: isLoading
+      isDashboardLoading
   };
-
-  if (isLoading || !appUser) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p>Loading application data...</p>
-      </div>
-    );
-  }
 
   return (
     <DashboardContext.Provider value={contextValue}>
@@ -200,7 +222,7 @@ export default function DashboardLayout({
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {realAppUser.role === 'Admin' && (
+                {realAppUser?.role === 'Admin' && (
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild tooltip="Admin Panel">
                       <Link href="/dashboard/admin">
@@ -227,7 +249,7 @@ export default function DashboardLayout({
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                 {realAppUser.role === 'Admin' && (
+                 {realAppUser?.role === 'Admin' && (
                     <div className="flex items-center gap-2">
                         <Eye className="h-5 w-5 text-muted-foreground" />
                         <Label htmlFor="impersonate-role" className="text-sm font-medium text-muted-foreground">View as:</Label>
@@ -250,7 +272,11 @@ export default function DashboardLayout({
               </div>
             </header>
             <main className="flex-1 animate-fade-in p-4 sm:p-6">
-              {children}
+              { isDashboardLoading ? (
+                  <div className="flex min-h-full items-center justify-center">
+                    <p>Loading dashboard data...</p>
+                  </div>
+              ) : children }
             </main>
           </SidebarInset>
         </div>
