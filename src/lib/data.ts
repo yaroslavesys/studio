@@ -258,14 +258,18 @@ export const createUserProfile = async (db: Firestore, user: import('firebase/au
         departmentId: allDepts.length > 0 ? allDepts[0].id : '',
     };
     
-    await setDoc(userRef, newUser).catch(async (error) => {
+    try {
+        await setDoc(userRef, newUser);
+    } catch (error) {
         const contextualError = await FirestorePermissionError.create({
             path: userRef.path,
             operation: 'create',
             requestResourceData: newUser
         });
         errorEmitter.emit('permission-error', contextualError);
-    });
+        // Re-throw or handle as needed, for now we just emit
+        throw contextualError;
+    }
     
     const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
     return { ...newUser, avatarUrl: imageMap.get(newUser.avatarId) || '' };
