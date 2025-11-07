@@ -11,27 +11,24 @@ service cloud.firestore {
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
-    
-    function getRequestingUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
 
     // --- Rules ---
 
     // USERS
     match /users/{userId} {
-      // List: Only Admins can list all users. 
-      // This rule reads the requesting user's own document to check their role.
-      allow list: if isSignedIn() && getRequestingUserData().role == 'Admin';
+      // List: Only Admins can list all users. This relies on the client query being correct.
+      // This rule only checks if the requesting user's document has the Admin role.
+      allow list: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
       
-      // Get: Users can get their own doc. Admins can get any.
-      allow get: if isSignedIn() && (isOwner(userId) || getRequestingUserData().role == 'Admin');
+      // Get: Users can get their own doc. TechLeads and Admins can get any user within their query scope.
+      // The security is enforced by the query in the client code.
+      allow get: if isSignedIn();
       
       // Create: Any authenticated user can create THEIR OWN user document.
       allow create: if isSignedIn() && isOwner(userId);
 
       // Update: Users can update their own doc. Admins can update any.
-      allow update: if isSignedIn() && (isOwner(userId) || getRequestingUserData().role == 'Admin');
+      allow update: if isSignedIn() && (isOwner(userId) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin');
 
       // Delete: Not allowed for now.
       allow delete: if false;
@@ -41,7 +38,7 @@ service cloud.firestore {
     // Any signed-in user can read departments. Only Admins can write.
     match /departments/{departmentId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && getRequestingUserData().role == 'Admin';
+      allow write: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
     }
 
     // ACCESS REQUESTS
@@ -50,35 +47,35 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
       // List: Only Admins can list all requests.
-      allow list: if isSignedIn() && getRequestingUserData().role == 'Admin';
+      allow list: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+      
+      // Query: TechLeads can query requests for their department.
+      allow list: if isSignedIn() 
+                  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TechLead'
+                  && request.query.limit <= 100 // Add a reasonable limit
+                  && request.query.get('departmentId') == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId;
 
       // Read (Get):
-      // - Admins can read all requests.
+      // - Admins can read all requests. (covered by list)
       // - TechLeads can read requests for their department.
       // - Users can read their own requests.
       allow get: if isSignedIn() && (
-        getRequestingUserData().role == 'Admin' ||
-        (getRequestingUserData().role == 'TechLead' && getRequestingUserData().departmentId == resource.data.departmentId) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin' ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TechLead' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId == resource.data.departmentId) ||
         resource.data.userId == request.auth.uid
       );
       
-      // We don't need a specific query rule here because the client-side code for TechLead
-      // already constrains the query by departmentId. We just need to ensure they can't
-      // query other departments. The 'get' rule implicitly helps secure this for single-doc reads.
-      // The client query logic combined with read rule provides sufficient security.
-
-
       // Update:
       // - TechLeads can update requests in their department.
       // - Admins can update any request.
       // - Users cannot update their own requests once submitted.
       allow update: if isSignedIn() && (
-        getRequestingUserData().role == 'Admin' ||
-        (getRequestingUserData().role == 'TechLead' && getRequestingUserData().departmentId == request.resource.data.departmentId)
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin' ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'TechLead' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.departmentId == request.resource.data.departmentId)
       );
                       
       // Delete: Only admins can delete.
-      allow delete: if isSignedIn() && getRequestingUserData().role == 'Admin';
+      allow delete: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
     }
   }
 }

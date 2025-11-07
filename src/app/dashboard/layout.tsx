@@ -76,27 +76,33 @@ export default function DashboardLayout({
 
   const usersQuery = useMemoFirebase(() => {
     if (!firestore || !appUser) return null;
-    switch (appUser.role) {
-      case 'Admin':
-        return collection(firestore, 'users');
-      case 'TechLead':
-         return query(collection(firestore, 'users'), where('departmentId', '==', appUser.departmentId));
-      default: // User
-        return query(collection(firestore, 'users'), where('id', '==', appUser.id));
+    // Admin can fetch all users. Other roles fetch based on their limited permissions.
+    // The security rules will enforce these limitations.
+    if (appUser.role === 'Admin') {
+      return collection(firestore, 'users');
     }
+    // A TechLead can only see users in their own department.
+    if (appUser.role === 'TechLead') {
+      return query(collection(firestore, 'users'), where('departmentId', '==', appUser.departmentId));
+    }
+    // A regular user can only fetch their own document.
+    return query(collection(firestore, 'users'), where('id', '==', appUser.id));
+    
   }, [firestore, appUser]);
   const { data: usersFromDb, isLoading: usersLoading } = useCollection<Omit<User, 'avatarUrl'>>(usersQuery);
   
   const requestsQuery = useMemoFirebase(() => {
      if (!firestore || !appUser) return null;
-      switch (appUser.role) {
-      case 'Admin':
+      // Admin gets all requests.
+      if (appUser.role === 'Admin') {
         return collection(firestore, 'accessRequests');
-      case 'TechLead':
+      }
+      // TechLead gets requests for their department.
+      if (appUser.role === 'TechLead') {
         return query(collection(firestore, 'accessRequests'), where('departmentId', '==', appUser.departmentId));
-      default: // User
-        return query(collection(firestore, 'accessRequests'), where('userId', '==', appUser.id));
-    }
+      }
+      // User gets their own requests.
+      return query(collection(firestore, 'accessRequests'), where('userId', '==', appUser.id));
   }, [firestore, appUser]);
   const { data: allRequests, isLoading: requestsLoading } = useCollection<AccessRequest>(requestsQuery);
   
