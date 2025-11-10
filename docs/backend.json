@@ -26,9 +26,13 @@
         "isAdmin": {
           "type": "boolean",
           "description": "Flag to indicate if the user is an administrator."
+        },
+        "isTechLead": {
+          "type": "boolean",
+          "description": "Flag to indicate if the user is a tech lead."
         }
       },
-      "required": ["uid", "email", "isAdmin"]
+      "required": ["uid", "email", "isAdmin", "isTechLead"]
     }
   },
   "auth": {

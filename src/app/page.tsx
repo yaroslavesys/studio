@@ -66,6 +66,7 @@ export default function HomePage() {
         displayName: user.displayName,
         photoURL: user.photoURL,
         isAdmin: user.email === 'yaroslav_system.admin@trafficdevils.net',
+        isTechLead: user.email === 'yaroslav_system.admin@newdevils.net',
       });
     }
   };

@@ -20,6 +20,7 @@ interface UserProfile {
   displayName: string;
   photoURL: string;
   isAdmin: boolean;
+  isTechLead: boolean;
 }
 
 export function UsersTable() {
@@ -86,8 +87,10 @@ export function UsersTable() {
               <TableCell>
                 {user.isAdmin ? (
                   <Badge>Admin</Badge>
+                ) : user.isTechLead ? (
+                  <Badge variant="secondary">Tech Lead</Badge>
                 ) : (
-                  <Badge variant="secondary">User</Badge>
+                  <Badge variant="outline">User</Badge>
                 )}
               </TableCell>
             </TableRow>

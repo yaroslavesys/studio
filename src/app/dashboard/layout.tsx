@@ -7,6 +7,7 @@ import { doc, getDoc } from 'firebase/firestore';
 
 interface UserProfile {
   isAdmin: boolean;
+  isTechLead: boolean;
 }
 
 export default function DashboardLayout({
@@ -29,7 +30,7 @@ export default function DashboardLayout({
       return;
     }
 
-    const checkAdminRole = async () => {
+    const checkUserRole = async () => {
       const userDocRef = doc(firestore, 'users', user.uid);
       try {
         const userDoc = await getDoc(userDocRef);
@@ -37,25 +38,26 @@ export default function DashboardLayout({
         if (userDoc.exists()) {
           const userProfile = userDoc.data() as UserProfile;
           if (userProfile.isAdmin) {
-            // If user is admin and not on an admin page, redirect to admin dashboard
             if (!pathname.startsWith('/dashboard/admin')) {
               router.replace('/dashboard/admin');
             }
+          } else if (userProfile.isTechLead) {
+            if (!pathname.startsWith('/dashboard/techlead')) {
+              router.replace('/dashboard/techlead');
+            }
           } else {
-            // If user is not admin and trying to access admin page, redirect to user dashboard
-            if (pathname.startsWith('/dashboard/admin')) {
+            if (pathname.startsWith('/dashboard/admin') || pathname.startsWith('/dashboard/techlead')) {
               router.replace('/dashboard');
             }
           }
         } else {
-            // If profile doesn't exist, and they are trying to access admin, redirect.
-             if (pathname.startsWith('/dashboard/admin')) {
+            if (pathname.startsWith('/dashboard/admin') || pathname.startsWith('/dashboard/techlead')) {
               router.replace('/dashboard');
             }
         }
       } catch (error) {
-        console.error("Error checking admin role:", error);
-         if (pathname.startsWith('/dashboard/admin')) {
+        console.error("Error checking user role:", error);
+         if (pathname.startsWith('/dashboard/admin') || pathname.startsWith('/dashboard/techlead')) {
             router.replace('/dashboard');
           }
       } finally {
@@ -63,7 +65,7 @@ export default function DashboardLayout({
       }
     };
 
-    checkAdminRole();
+    checkUserRole();
   }, [user, isLoading, router, firestore, pathname]);
 
   if (isLoading || isCheckingRole) {
