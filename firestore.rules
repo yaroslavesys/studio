@@ -106,18 +106,22 @@ service cloud.firestore {
       // Users can read their own requests.
       // Admins can read any request.
       // TechLeads can read requests from users in their team.
-      function isRequestFromTechLeadTeam() {
+      function isRequestFromTechLeadTeam(requestId) {
         let requestUserId = get(/databases/$(database)/documents/requests/$(requestId)).data.userId;
         return isUserInTechLeadTeam(requestUserId);
       }
-      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isRequestFromTechLeadTeam());
+      allow get: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isRequestFromTechLeadTeam(requestId));
       
       // Admins and relevant TechLeads can update (approve/reject) requests.
       // Users cannot update their own requests.
-      allow update: if isSignedIn() && (isAdmin() || isRequestFromTechLeadTeam());
+      allow update: if isSignedIn() && (isAdmin() || isRequestFromTechLeadTeam(requestId));
       
       // Only admins can delete requests.
       allow delete: if isAdmin();
+
+      // Admins can list all requests.
+      // TechLeads can list requests from their team members.
+      allow list: if isSignedIn() && (isAdmin() || isTechLead());
     }
     
     // CONTACTS

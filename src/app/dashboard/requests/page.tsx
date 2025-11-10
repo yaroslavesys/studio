@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -8,13 +9,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, orderBy } from 'firebase/firestore';
 import { useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HelpCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SafeDate } from '@/components/safe-date';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Service {
     id: string;
@@ -28,6 +30,8 @@ interface AccessRequest {
     status: 'pending' | 'approved' | 'rejected';
     requestedAt: any; // Firestore Timestamp
     serviceName?: string; // Populated client-side
+    resolvedAt?: any;
+    notes?: string;
 }
 
 export default function RequestsPage() {
@@ -41,7 +45,7 @@ export default function RequestsPage() {
 
   const userRequestsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, 'requests'), where('userId', '==', user.uid));
+    return query(collection(firestore, 'requests'), where('userId', '==', user.uid), orderBy('requestedAt', 'desc'));
   }, [firestore, user]);
 
   const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesQuery);
@@ -58,6 +62,7 @@ export default function RequestsPage() {
       ...req,
       serviceName: servicesMap.get(req.serviceId) || 'Unknown Service',
       requestedAt: req.requestedAt?.toDate ? req.requestedAt.toDate() : null,
+      resolvedAt: req.resolvedAt?.toDate ? req.resolvedAt.toDate() : null,
     }));
   }, [userRequestsData, servicesMap]);
 
@@ -77,12 +82,14 @@ export default function RequestsPage() {
                     <Skeleton className="h-24 w-full" />
                 ) : userRequests && userRequests.length > 0 ? (
                    <div className="overflow-hidden rounded-md border">
+                    <TooltipProvider>
                     <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Service</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Requested On</TableHead>
+                                <TableHead>Resolved On</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -90,19 +97,32 @@ export default function RequestsPage() {
                                 <TableRow key={req.id}>
                                     <TableCell className="font-medium">{req.serviceName}</TableCell>
                                     <TableCell>
-                                        <Badge variant={
-                                            req.status === 'approved' ? 'default' :
-                                            req.status === 'rejected' ? 'destructive' :
-                                            'secondary'
-                                        }>{req.status}</Badge>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Badge variant={
+                                                    req.status === 'approved' ? 'default' :
+                                                    req.status === 'rejected' ? 'destructive' :
+                                                    'secondary'
+                                                } className={req.notes ? "cursor-help" : ""}>{req.status}</Badge>
+                                            </TooltipTrigger>
+                                            {req.notes && (
+                                                <TooltipContent>
+                                                    <p>{req.notes}</p>
+                                                </TooltipContent>
+                                            )}
+                                        </Tooltip>
                                     </TableCell>
                                     <TableCell>
                                         <SafeDate date={req.requestedAt} />
+                                    </TableCell>
+                                    <TableCell>
+                                        <SafeDate date={req.resolvedAt} />
                                     </TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                     </Table>
+                    </TooltipProvider>
                     </div>
                 ) : (
                      <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-8 text-center">

@@ -13,7 +13,7 @@ import {
   SidebarFooter,
   SidebarInset,
 } from '@/components/ui/sidebar';
-import { Briefcase, LogOut, Shield, Users, Mail, KeyRound } from 'lucide-react';
+import { Briefcase, LogOut, Shield, Users, Mail, KeyRound, Archive } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { signOut } from 'firebase/auth';
 import { usePathname, useRouter } from 'next/navigation';
@@ -56,6 +56,17 @@ export default function AdminDashboardLayout({
                 <Link href="/dashboard/admin">
                   <Users />
                   Users
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname.startsWith('/dashboard/admin/requests')}
+              >
+                <Link href="/dashboard/admin/requests">
+                  <Archive />
+                  Requests
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
