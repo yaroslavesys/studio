@@ -12,16 +12,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { User } from '@/lib/types';
-import Link from 'next/link';
-import { useFirebase } from '@/firebase';
+import { useAuth } from '@/firebase';
 
 export function UserNav({ user }: { user: User & { avatarUrl: string } }) {
-  const { auth } = useFirebase();
+  const auth = useAuth();
 
   const handleSignOut = async () => {
     if (auth) {
       await auth.signOut();
-      // Force a hard reload to the login page to clear all state.
       window.location.href = '/';
     }
   };

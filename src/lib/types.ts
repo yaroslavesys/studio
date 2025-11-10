@@ -25,7 +25,11 @@ export interface AccessRequest {
   status: RequestStatus;
   userId: string;
   departmentId: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string; // Should be a server timestamp, but string for client
+  updatedAt: string; // Should be a server timestamp, but string for client
   techLeadComment?: string;
+  // Denormalized fields for easy display
+  userName?: string;
+  userEmail?: string;
+  departmentName?: string;
 }

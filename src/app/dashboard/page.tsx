@@ -5,10 +5,9 @@ import { RequestsTable } from '@/components/dashboard/requests-table';
 import { NewRequestDialog } from '@/components/dashboard/new-request-dialog';
 import type { AccessRequest } from '@/lib/types';
 import { useMemo } from 'react';
-import { useDashboard } from './layout'; // Import the new hook
+import { useDashboard } from './layout';
 
 export default function DashboardPage() {
-  // Get all data from the context provided by the layout
   const { appUser, allUsers, allDepartments, allRequests, isDashboardLoading } = useDashboard();
   
   const userDepartment = useMemo(() => {
@@ -25,23 +24,25 @@ export default function DashboardPage() {
       case 'TechLead':
         return allRequests.filter(r => r.departmentId === appUser.departmentId);
       case 'Admin':
-        // Admins see department-specific view on main dashboard, and all requests in admin panel
-        return allRequests.filter(r => r.departmentId === appUser.departmentId);
+        return allRequests;
       default:
         return [];
     }
   }, [allRequests, appUser]);
 
-  const requestsWithUserNames = useMemo(() => {
-    if (!requestsForView || !allUsers) return [];
+  const requestsWithDetails = useMemo(() => {
+    if (!requestsForView || !allUsers || !allDepartments) return [];
     return requestsForView.map(request => {
       const requestingUser = allUsers.find(u => u.id === request.userId);
+      const department = allDepartments.find(d => d.id === request.departmentId);
       return {
         ...request,
         userName: requestingUser?.name || 'Unknown User',
+        userEmail: requestingUser?.email || 'N/A',
+        departmentName: department?.name || 'Unknown Dept',
       };
     });
-  }, [requestsForView, allUsers]);
+  }, [requestsForView, allUsers, allDepartments]);
 
 
   if (isDashboardLoading) {
@@ -64,10 +65,7 @@ export default function DashboardPage() {
     );
   }
   
-  if (!appUser) {
-    // This can happen briefly during initial load or if something goes wrong
-    return null; 
-  }
+  if (!appUser) return null; 
 
   return (
     <div className="space-y-6">
@@ -87,7 +85,7 @@ export default function DashboardPage() {
         </div>
       </div>
       <StatCards requests={requestsForView} userId={appUser.id} />
-      <RequestsTable requests={requestsWithUserNames} user={appUser} allUsers={allUsers} />
+      <RequestsTable requests={requestsWithDetails} user={appUser} allUsers={allUsers} />
     </div>
   );
 }

@@ -90,7 +90,7 @@ export function AllRequestsManagement({ requests }: { requests: RequestWithDetai
             </TableRow>
           </TableHeader>
           <TableBody>
-            {requests.length > 0 ? requests.map(request => (
+            {requests && requests.length > 0 ? requests.map(request => (
               <TableRow key={request.id}>
                 <TableCell className="font-medium">
                     <div>{request.userName}</div>

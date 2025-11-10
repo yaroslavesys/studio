@@ -31,16 +31,16 @@ const statusStyles: Record<RequestStatus, string> = {
   Rejected: 'bg-red-500/10 text-red-400 border-red-500/20',
 };
 
-type RequestWithUser = AccessRequest & { userName: string };
+type RequestWithDetails = AccessRequest & { userName?: string; departmentName?: string, userEmail?: string };
+
 
 export function RequestsTable({
   requests,
   user,
-  allUsers
 }: {
-  requests: RequestWithUser[];
+  requests: RequestWithDetails[];
   user: User;
-  allUsers: User[];
+  allUsers: (User & { avatarUrl: string })[];
 }) {
   let [isPending, startTransition] = useTransition();
   const { toast } = useToast();

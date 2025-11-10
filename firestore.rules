@@ -1,118 +1,40 @@
-/**
- * @fileOverview
- * This ruleset enforces a user-ownership model for user data and a public-read,
- * owner-write model for access requests. It leverages denormalization to avoid
- * costly `get()` calls and ensures that only authenticated users can create
- * or modify data.
- *
- * Data Structure:
- * - /users/{userId}: Stores user profiles; only the authenticated user can
- *   read or write their own profile.
- * - /roles/{roleId}: Stores role definitions; read and write access is denied
- *   to all clients.
- * - /departments/{departmentId}: Stores department definitions; read and write
- *   access is denied to all clients.
- * - /access_requests/{accessRequestId}: Stores access requests; any logged in user
- *   can read any request, but only the request creator can modify or delete.
- *
- * Key Security Decisions:
- * - User listing is disallowed.
- * - Read and write access is denied to `/roles` and `/departments` collections to all clients
- * - Access requests are publicly readable but owner-writable.
- *
- * Denormalization for Authorization:
- * - The `AccessRequest` entity contains the `userId` field to enable direct
- *   authorization checks without additional `get()` calls.
- */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-    /**
-     * @description Controls access to user profile data.
-     * @path /users/{userId}
-     * @allow (create) - Authenticated user can create their own profile if the userId matches their auth UID.
-     * @allow (get, list, update, delete) - Authenticated user can access their own profile.
-     * @deny (create) - If the userId does not match the authenticated user's UID.
-     * @principle Enforces document ownership for all operations.
-     */
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+
     match /users/{userId} {
-      //function isRole(role) {
-       // return get(/databases/$(database)/documents/roles/$(request.auth.token.role)).data.admin == true;
-     // }
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
     }
 
-    /**
-     * @description Controls access to role data.
-     * @path /roles/{roleId}
-     * @allow (none) - No client can read or write roles.
-     * @principle Restricts access to role data for all users.
-     */
-    match /roles/{roleId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    /**
-     * @description Controls access to department data.
-     * @path /departments/{departmentId}
-     * @allow (none) - No client can read or write departments.
-     * @principle Restricts access to department data for all users.
-     */
     match /departments/{departmentId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    /**
-     * @description Controls access to access request data.
-     * @path /access_requests/{accessRequestId}
-     * @allow (get, list) - Any authenticated user can read access requests.
-     * @allow (create) - Any authenticated user can create an access request with their own userId.
-     * @allow (update, delete) - Only the user who created the access request can update or delete it.
-     * @deny (create) - If the userId in the request does not match the authenticated user's UID.
-     * @principle Enforces document ownership for writes; allows public reads.
-     */
-    match /access_requests/{accessRequestId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
+    match /accessRequests/{requestId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(request.resource.data.userId);
+      allow update, delete: if isOwner(resource.data.userId) || isAdmin();
+    }
 
-      function isOwner() {
-        return request.auth.uid == resource.data.userId;
-      }
-
-      function isExistingOwner() {
-        return isOwner() && resource != null;
-      }
-
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isExistingOwner();
-      allow delete: if isExistingOwner();
+    match /meta/{docId} {
+      allow read: if true;
+      allow write: if false; // Should only be written to by trusted server processes
     }
   }
 }

@@ -1,206 +1,75 @@
 {
   "entities": {
     "User": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
       "type": "object",
-      "description": "Represents a user in the AccessFlow application.",
+      "description": "Represents a user in the application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the user entity."
-        },
-        "googleId": {
-          "type": "string",
-          "description": "The Google ID of the user obtained from OAuth2 authentication."
-        },
-        "email": {
-          "type": "string",
-          "description": "User's email address.",
-          "format": "email"
-        },
-        "roleId": {
-          "type": "string",
-          "description": "Reference to the Role entity. (Relationship: Role 1:N User)"
-        },
-        "departmentId": {
-          "type": "string",
-          "description": "Reference to the Department entity. (Relationship: Department 1:N User)"
-        }
+        "id": { "type": "string", "description": "Unique identifier (matches Firebase Auth UID)." },
+        "name": { "type": "string", "description": "User's full name." },
+        "email": { "type": "string", "format": "email", "description": "User's email address." },
+        "avatarId": { "type": "string", "description": "ID for the placeholder avatar image." },
+        "role": { "type": "string", "enum": ["Admin", "TechLead", "User"], "description": "User's role." },
+        "departmentId": { "type": "string", "description": "ID of the department the user belongs to." }
       },
-      "required": [
-        "id",
-        "googleId",
-        "email",
-        "roleId",
-        "departmentId"
-      ]
-    },
-    "Role": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Role",
-      "type": "object",
-      "description": "Represents a user role (e.g., User, TechLead, Admin).",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the role entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the role (e.g., User, TechLead, Admin)."
-        },
-        "permissions": {
-          "type": "array",
-          "description": "List of permissions for this role",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "id",
-        "name"
-      ]
+      "required": ["id", "name", "email", "role", "departmentId", "avatarId"]
     },
     "Department": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Department",
       "type": "object",
       "description": "Represents a department within the organization.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the department entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the department."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the department." },
+        "name": { "type": "string", "description": "The name of the department." }
       },
-      "required": [
-        "id",
-        "name"
-      ]
+      "required": ["id", "name"]
     },
     "AccessRequest": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "AccessRequest",
       "type": "object",
       "description": "Represents an access request submitted by a user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the access request entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the User entity. (Relationship: User 1:N AccessRequest)"
-        },
-        "title": {
-          "type": "string",
-          "description": "Title of the access request."
-        },
-        "description": {
-          "type": "string",
-          "description": "Detailed description of the access request."
-        },
-        "requestType": {
-          "type": "string",
-          "description": "Type of access requested (e.g., system, data, other)."
-        },
-        "status": {
-          "type": "string",
-          "description": "The status of the request. e.g. pending, approved, rejected"
-        },
-        "techLeadId": {
-          "type": "string",
-          "description": "Reference to the TechLead User entity who approved/rejected the access request."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the access request." },
+        "title": { "type": "string", "description": "A brief title for the request." },
+        "description": { "type": "string", "description": "Detailed justification for the request." },
+        "requestType": { "type": "string", "enum": ["System", "Data", "Other"], "description": "The category of the access request." },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"], "description": "The current status of the request." },
+        "userId": { "type": "string", "description": "The ID of the user who made the request." },
+        "departmentId": { "type": "string", "description": "The department ID associated with the request." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the request was created." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when the request was last updated." },
+        "techLeadComment": { "type": "string", "description": "Optional comment from the Tech Lead during review." }
       },
-      "required": [
-        "id",
-        "userId",
-        "title",
-        "description",
-        "requestType",
-        "status"
-      ]
+      "required": ["id", "title", "description", "requestType", "status", "userId", "departmentId", "createdAt", "updatedAt"]
+    },
+    "Meta": {
+        "title": "Meta",
+        "type": "object",
+        "description": "Internal metadata for application state.",
+        "properties": {
+            "isSeeded": { "type": "boolean", "description": "Flag to check if the database has been seeded." }
+        }
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["google.com"]
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores user data. Includes user's Google ID, email, roleId, and departmentId. Authorization is based on the `userId` path parameter.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/roles/{roleId}",
-        "definition": {
-          "entityName": "Role",
-          "schema": {
-            "$ref": "#/backend/entities/Role"
-          },
-          "description": "Stores role data, including the role's name and permissions.",
-          "params": [
-            {
-              "name": "roleId",
-              "description": "The unique identifier for the role."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/departments/{departmentId}",
-        "definition": {
-          "entityName": "Department",
-          "schema": {
-            "$ref": "#/backend/entities/Department"
-          },
-          "description": "Stores department data, including the department's name.",
-          "params": [
-            {
-              "name": "departmentId",
-              "description": "The unique identifier for the department."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/access_requests/{accessRequestId}",
-        "definition": {
-          "entityName": "AccessRequest",
-          "schema": {
-            "$ref": "#/backend/entities/AccessRequest"
-          },
-          "description": "Stores access request data. Includes denormalized `userId` for authorization independence.",
-          "params": [
-            {
-              "name": "accessRequestId",
-              "description": "The unique identifier for the access request."
-            }
-          ]
-        }
-      }
-    ],
-    "reasoning": "The Firestore data structure is designed to support the AccessFlow application, emphasizing security, scalability, and maintainability. It adheres to the core design principles of Authorization Independence, Clarity of Intent, DBAC (Database-Based Access Control), QAPs (Rules are not Filters), and Invariants.\n\nAuthorization Independence is achieved through denormalization. Specifically, the `AccessRequest` collection includes the `userId` and implicitly inherits access control from `/users/{userId}`, eliminating the need for `get()` calls in security rules and enabling atomic operations.\n\nStructural Segregation is used to maintain a homogeneous security posture. User data is stored under `/users/{userId}`, and access requests are segregated into a separate collection. Collaborative data patterns will emerge upon further details; currently, path-based ownership is sufficient. Data clarity and predictability are ensured by using explicit state modeling with the `status` field in the `AccessRequest` entity.\n\nQAPs (Rules are not Filters) are supported by segregating data based on ownership, making `list` operations secure by scoping them to the appropriate user or department context.\n\nThe structure facilitates simple, robust, and easily debuggable security rules because authorization logic is based on the path and denormalized authorization fields, not on complex `get()` calls or custom claims."
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores individual user profiles. Document ID is the Firebase Auth UID."
+    },
+    "/departments/{departmentId}": {
+      "schema": { "$ref": "#/entities/Department" },
+      "description": "Stores organizational departments."
+    },
+    "/accessRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/AccessRequest" },
+      "description": "Stores all access requests from users."
+    },
+    "/meta/{metaId}": {
+        "schema": { "$ref": "#/entities/Meta"},
+        "description": "Stores metadata for the application, like seeding status."
+    }
   }
 }

@@ -56,45 +56,51 @@ export default function DashboardLayout({
 }) {
   const { firestore, user: firebaseUser, isUserLoading } = useFirebase();
   const router = useRouter();
-
   const [impersonatedRole, setImpersonatedRole] = useState<UserRole | null>(null);
   
-  // 1. Fetch the current user's profile from Firestore
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !firebaseUser) return null;
     return doc(firestore, 'users', firebaseUser.uid);
   }, [firestore, firebaseUser]);
-  const { data: realAppUserFromDb, isLoading: isAppUserLoading } = useDoc<Omit<User, 'avatarUrl'>>(userDocRef);
 
-  // 2. Seed database and create profile if it doesn't exist
+  const { data: realAppUserFromDb, isLoading: isAppUserLoadingFromHook } = useDoc<User>(userDocRef);
+  const [isSeedingOrCreating, setIsSeedingOrCreating] = useState(true);
+  const [localAppUser, setLocalAppUser] = useState<User | null>(null);
+
   useEffect(() => {
-    const setupUser = async () => {
-      if (!firestore || !firebaseUser || isAppUserLoading) return;
-      
-      await checkAndSeedDatabase(firestore);
+    if (isUserLoading) return;
+    if (!firebaseUser) {
+      router.push('/');
+      return;
+    }
+    if (!firestore) return;
 
+    const setupUser = async () => {
+      setIsSeedingOrCreating(true);
+      await checkAndSeedDatabase(firestore);
       if (!realAppUserFromDb) {
-        try {
-          await createUserProfile(firestore, firebaseUser);
-          // No need to set state, useDoc will update automatically
-        } catch (error) {
-          console.error("Failed to create user profile:", error);
-          // Handle error, maybe sign out user
-        }
+        const createdProfile = await createUserProfile(firestore, firebaseUser);
+        setLocalAppUser(createdProfile);
+      } else {
+        setLocalAppUser(realAppUserFromDb);
       }
+      setIsSeedingOrCreating(false);
     };
     setupUser();
-  }, [firestore, firebaseUser, realAppUserFromDb, isAppUserLoading]);
+  }, [firestore, firebaseUser, isUserLoading, realAppUserFromDb, router]);
 
-  // 3. Derive the user object, applying impersonation if active
+
+  const isAppUserLoading = isAppUserLoadingFromHook || isSeedingOrCreating;
+
   const realAppUser = useMemo(() => {
-    if (!realAppUserFromDb) return null;
+    const user = realAppUserFromDb || localAppUser;
+    if (!user) return null;
     const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
     return {
-      ...realAppUserFromDb,
-      avatarUrl: imageMap.get(realAppUserFromDb.avatarId) || '',
+      ...user,
+      avatarUrl: imageMap.get(user.avatarId) || '',
     };
-  }, [realAppUserFromDb]);
+  }, [realAppUserFromDb, localAppUser]);
 
   const appUser = useMemo(() => {
     if (!realAppUser) return null;
@@ -104,72 +110,42 @@ export default function DashboardLayout({
     return realAppUser;
   }, [realAppUser, impersonatedRole]);
 
-  // 4. Fetch all other data based on the derived user's role
   const departmentsQuery = useMemoFirebase(() => firestore ? collection(firestore, 'departments') : null, [firestore]);
   const { data: allDepartments, isLoading: deptsLoading } = useCollection<Department>(departmentsQuery);
 
   const usersQuery = useMemoFirebase(() => {
-    if (!firestore || !appUser) return null;
-    // Admin can fetch all users.
-    if (appUser.role === 'Admin') {
-      return collection(firestore, 'users');
-    }
-    // Non-admins cannot list all users due to security rules, so we don't even try.
-    // We fetch their own doc via useDoc, and if needed, other users can be fetched individually.
-    // For TechLeads, we'll fetch their department members on the pages that need it.
-    return null;
+    if (!firestore || !appUser || appUser.role !== 'Admin') return null;
+    return collection(firestore, 'users');
   }, [firestore, appUser]);
-  const { data: allUsersFromDb, isLoading: usersLoading } = useCollection<Omit<User, 'avatarUrl'>>(usersQuery);
+  const { data: allUsersFromDb, isLoading: usersLoading } = useCollection<User>(usersQuery);
   
   const requestsQuery = useMemoFirebase(() => {
     if (!firestore || !appUser) return null;
-    // Admin gets all requests.
     if (appUser.role === 'Admin') {
       return collection(firestore, 'accessRequests');
     }
-    // TechLead gets requests for their department.
     if (appUser.role === 'TechLead') {
       return query(collection(firestore, 'accessRequests'), where('departmentId', '==', appUser.departmentId));
     }
-    // User gets their own requests.
     return query(collection(firestore, 'accessRequests'), where('userId', '==', appUser.id));
   }, [firestore, appUser]);
   const { data: allRequests, isLoading: requestsLoading } = useCollection<AccessRequest>(requestsQuery);
   
-  // This derived state now handles multiple scenarios for allUsers
   const allUsers = useMemo(() => {
     const imageMap = new Map(PlaceHolderImages.map(img => [img.id, img.imageUrl]));
-    
-    // Admins get the full list from the 'allUsersFromDb' collection query
-    if (appUser?.role === 'Admin' && allUsersFromDb) {
-       return allUsersFromDb.map(user => ({
-        ...user,
-        avatarUrl: imageMap.get(user.avatarId) || '',
-      }));
-    }
-
-    // For non-admins, 'allUsers' starts with just their own profile.
-    // Other components might add to this list if they fetch more user docs.
-    if (appUser) {
-        return [{ ...appUser }];
-    }
-
-    return [];
+    const users = allUsersFromDb || (appUser ? [appUser] : []);
+    return users.map(user => ({
+      ...user,
+      avatarUrl: imageMap.get(user.avatarId) || '',
+    }));
   }, [allUsersFromDb, appUser]);
 
-  // Handle auth state redirects
-  useEffect(() => {
-    if (!isUserLoading && !firebaseUser) {
-      router.push('/');
-    }
-  }, [firebaseUser, isUserLoading, router]);
-
   const userDepartment = useMemo(() => {
-    if (!appUser || !allDepartments || allDepartments.length === 0) return null;
+    if (!appUser || !allDepartments) return null;
     return allDepartments.find(d => d.id === appUser.departmentId);
   }, [appUser, allDepartments]);
 
-  const isDashboardLoading = isUserLoading || isAppUserLoading || (appUser?.role === 'Admin' && (usersLoading || requestsLoading));
+  const isDashboardLoading = isUserLoading || isAppUserLoading || usersLoading || requestsLoading || deptsLoading;
 
   if (isUserLoading || isAppUserLoading) {
     return (
@@ -178,11 +154,11 @@ export default function DashboardLayout({
       </div>
     );
   }
-
+  
   if (!appUser) {
      return (
       <div className="flex min-h-screen items-center justify-center">
-        <p>Could not load user profile. Redirecting...</p>
+        <p>Could not load user profile. Please try again.</p>
       </div>
     );
   }
@@ -201,17 +177,13 @@ export default function DashboardLayout({
         <div className="flex min-h-screen">
           <Sidebar>
             <SidebarHeader className="p-4">
-              <div
-                className="flex items-center gap-2"
-                data-testid="sidebar-header-content"
-              >
+              <div className="flex items-center gap-2">
                 <Logo />
                 <span className="text-lg font-semibold text-foreground group-data-[collapsible=icon]:hidden">
                   Devils access
                 </span>
               </div>
             </SidebarHeader>
-
             <SidebarContent>
               <SidebarMenu>
                 <SidebarMenuItem>

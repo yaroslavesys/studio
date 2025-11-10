@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { addAccessRequest, updateRequestStatus, deleteRequestById, updateUserRoleInDb } from './data';
 import type { RequestType, UserRole, RequestStatus } from './types';
-import { initializeFirebase } from '@/firebase';
+import { initializeFirebase } from '@/firebase/server-actions-init';
 
 const requestSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters long.'),
@@ -12,7 +12,6 @@ const requestSchema = z.object({
   requestType: z.enum(['System', 'Data', 'Other']),
 });
 
-// Helper function to get Firestore instance in a server action
 function getDb() {
     return initializeFirebase().firestore;
 }
@@ -31,6 +30,8 @@ export async function createAccessRequest(
   }
   
   const db = getDb();
+  if (!db) return { error: 'Firestore not initialized' };
+  
   addAccessRequest(
     db,
     {
@@ -48,6 +49,7 @@ export async function createAccessRequest(
 
 export async function updateRequest(id: string, status: RequestStatus, techLeadComment?: string) {
   const db = getDb();
+  if (!db) return { error: 'Firestore not initialized' };
   updateRequestStatus(db, id, status, techLeadComment);
   revalidatePath('/dashboard');
   revalidatePath('/dashboard/admin');
@@ -55,6 +57,7 @@ export async function updateRequest(id: string, status: RequestStatus, techLeadC
 
 export async function deleteRequest(id: string) {
     const db = getDb();
+    if (!db) return { error: 'Firestore not initialized' };
     deleteRequestById(db, id);
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/admin');
@@ -62,6 +65,7 @@ export async function deleteRequest(id: string) {
 
 export async function updateUserRole(id: string, role: UserRole) {
     const db = getDb();
+    if (!db) return { error: 'Firestore not initialized' };
     updateUserRoleInDb(db, id, role);
     revalidatePath('/dashboard/admin');
 }
