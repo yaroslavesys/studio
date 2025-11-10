@@ -7,33 +7,16 @@ import { Firestore, getFirestore } from 'firebase/firestore';
 import { useMemo } from 'react';
 import type { DependencyList } from 'react';
 
-// IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase(): {
   firebaseApp: FirebaseApp;
   auth: Auth;
   firestore: Firestore;
 } {
-  if (!getApps().length) {
-    let firebaseApp;
-    try {
-      // This will throw if not in a Firebase hosting environment
-      firebaseApp = initializeApp();
-    } catch (e) {
-      if (process.env.NODE_ENV === 'production') {
-        console.warn('Automatic initialization failed. Falling back to firebase config object.', e);
-      }
-      firebaseApp = initializeApp(firebaseConfig);
-    }
-    return getSdks(firebaseApp);
-  }
-  return getSdks(getApp());
-}
-
-export function getSdks(firebaseApp: FirebaseApp) {
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   return {
-    firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp),
+    firebaseApp: app,
+    auth: getAuth(app),
+    firestore: getFirestore(app),
   };
 }
 
