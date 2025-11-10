@@ -16,6 +16,7 @@ export function initializeFirebase(): {
   if (!getApps().length) {
     let firebaseApp;
     try {
+      // This will throw if not in a Firebase hosting environment
       firebaseApp = initializeApp();
     } catch (e) {
       if (process.env.NODE_ENV === 'production') {
@@ -62,3 +63,6 @@ export * from './firestore/use-collection';
 export * from './firestore/use-doc';
 export * from './errors';
 export * from './error-emitter';
+
+// Re-exporting the hooks from the provider
+export { useFirebase, useAuth, useFirestore, useFirebaseApp, useUser } from './provider';
