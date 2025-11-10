@@ -13,10 +13,10 @@ import {
   SidebarFooter,
   SidebarInset,
 } from '@/components/ui/sidebar';
-import { LogOut, Shield, Users } from 'lucide-react';
+import { Briefcase, LogOut, Shield, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { signOut } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Logo } from '@/components/logo';
 
 export default function AdminDashboardLayout({
@@ -27,6 +27,7 @@ export default function AdminDashboardLayout({
   const { user } = useUser();
   const auth = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleSignOut = async () => {
     if (auth) {
@@ -47,9 +48,21 @@ export default function AdminDashboardLayout({
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/admin" isActive>
+              <SidebarMenuButton
+                href="/dashboard/admin"
+                isActive={pathname === '/dashboard/admin'}
+              >
                 <Users />
                 Users
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                href="/dashboard/admin/teams"
+                isActive={pathname === '/dashboard/admin/teams'}
+              >
+                <Briefcase />
+                Teams
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
