@@ -1,6 +1,6 @@
 'use client';
-import { useState } from 'react';
-import { collection, doc, getDocs, query, updateDoc } from 'firebase/firestore';
+import { useState, useMemo } from 'react';
+import { collection, doc, updateDoc } from 'firebase/firestore';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import {
   Table,
@@ -98,14 +98,18 @@ function EditUserForm({
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     const userDocRef = doc(firestore, 'users', user.uid);
+    // If teamId is an empty string, convert it to null or delete it before updating
+    const updateData: any = { ...values };
+    if (updateData.teamId === '') {
+      updateData.teamId = null; // Or delete updateData.teamId;
+    }
+
     try {
-      await updateDoc(userDocRef, {
-        ...values,
-      }).catch((e) => {
+      await updateDoc(userDocRef, updateData).catch((e) => {
         const permissionError = new FirestorePermissionError({
           path: userDocRef.path,
           operation: 'update',
-          requestResourceData: values,
+          requestResourceData: updateData,
         });
         errorEmitter.emit('permission-error', permissionError);
         throw permissionError;
@@ -183,11 +187,11 @@ function EditUserForm({
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Assign to a team" />
+                      <SelectValue placeholder="No Team" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="">No Team</SelectItem>
+                    <SelectItem value="none">No Team</SelectItem>
                     {teams.map((team) => (
                       <SelectItem key={team.id} value={team.id}>
                         {team.name}
@@ -228,7 +232,7 @@ export function UsersTable() {
   const { data: users, isLoading: isLoadingUsers, error: usersError } = useCollection<UserProfile>(usersCollection);
   const { data: teams, isLoading: isLoadingTeams, error: teamsError } = useCollection<Team>(teamsCollection);
 
-  const teamsMap = useMemoFirebase(() => {
+  const teamsMap = useMemo(() => {
     if (!teams) return new Map<string, string>();
     return new Map(teams.map((team) => [team.id, team.name]));
   }, [teams]);
