@@ -49,48 +49,44 @@ export default function UserDashboardLayout({
         <SidebarContent>
            <SidebarMenu>
              <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname === '/dashboard'}
-              >
-                <Link href="/dashboard">
+              <Link href="/dashboard">
+                <SidebarMenuButton
+                  isActive={pathname === '/dashboard'}
+                >
                   <LayoutDashboard />
                   Dashboard
-                </Link>
-              </SidebarMenuButton>
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname.startsWith('/dashboard/accesses')}
-              >
-                <Link href="/dashboard/accesses">
+               <Link href="/dashboard/accesses">
+                <SidebarMenuButton
+                  isActive={pathname.startsWith('/dashboard/accesses')}
+                >
                   <Briefcase />
                   Available Accesses
-                </Link>
-              </SidebarMenuButton>
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
              <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname.startsWith('/dashboard/requests')}
-              >
-                <Link href="/dashboard/requests">
+               <Link href="/dashboard/requests">
+                <SidebarMenuButton
+                  isActive={pathname.startsWith('/dashboard/requests')}
+                >
                   <Archive />
                   My Requests
-                </Link>
-              </SidebarMenuButton>
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
              <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname.startsWith('/dashboard/contacts')}
-              >
-                <Link href="/dashboard/contacts">
+              <Link href="/dashboard/contacts">
+                <SidebarMenuButton
+                  isActive={pathname.startsWith('/dashboard/contacts')}
+                >
                   <Mail />
                   Contacts
-                </Link>
-              </SidebarMenuButton>
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
