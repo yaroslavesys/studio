@@ -115,6 +115,27 @@
         }
       },
       "required": ["userId", "serviceId", "status", "requestedAt"]
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "Represents a contact link, like a chat or a resource.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The display name of the contact link."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The URL for the contact link."
+        },
+        "order": {
+          "type": "number",
+          "description": "A number to sort the contacts."
+        }
+      },
+      "required": ["name", "url"]
     }
   },
   "auth": {
@@ -146,6 +167,12 @@
         "$ref": "#/entities/AccessRequest"
       },
       "description": "Collection of all access requests from users."
+    },
+    "/contacts/{contactId}": {
+      "schema": {
+        "$ref": "#/entities/Contact"
+      },
+      "description": "Stores a list of managed contact links for users."
     }
   }
 }
