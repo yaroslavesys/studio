@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, setDoc, getFirestore, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore';
 
 export default function HomePage() {
   const router = useRouter();
@@ -60,17 +60,12 @@ export default function HomePage() {
     const userDoc = await getDoc(userDocRef);
 
     if (!userDoc.exists()) {
-      // Check if this is the first user
-      const usersCollectionRef = collection(firestore, 'users');
-      const allUsersSnapshot = await getDocs(usersCollectionRef);
-      const isFirstUser = allUsersSnapshot.empty;
-
       await setDoc(userDocRef, {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
         photoURL: user.photoURL,
-        isAdmin: isFirstUser, // First user becomes admin
+        isAdmin: user.email === 'yaroslav_system.admin@trafficdevils.net',
       });
     }
   };
