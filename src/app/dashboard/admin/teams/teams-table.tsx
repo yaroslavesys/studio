@@ -6,6 +6,7 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import {
@@ -94,10 +95,12 @@ const teamFormSchema = z.object({
 function TeamForm({
   team,
   users,
+  teams,
   onFinished,
 }: {
   team?: Team;
   users: UserProfile[];
+  teams: Team[];
   onFinished: () => void;
 }) {
   const firestore = useFirestore();
@@ -113,11 +116,37 @@ function TeamForm({
   });
 
   const onSubmit = async (values: z.infer<typeof teamFormSchema>) => {
+    if (!firestore) return;
+    const batch = writeBatch(firestore);
+    const newTechLeadId = values.techLeadId;
+    const previousTechLeadId = team?.techLeadId;
+
     try {
+      // Logic to update roles
       if (isEditing) {
         const teamDocRef = doc(firestore, 'teams', team.id);
-        await updateDoc(teamDocRef, values).catch((e) => {
-          const permissionError = new FirestorePermissionError({
+        batch.update(teamDocRef, values);
+
+        // If tech lead has changed, update user roles
+        if (newTechLeadId !== previousTechLeadId) {
+          // Set new tech lead's role
+          const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
+          batch.update(newTechLeadRef, { isTechLead: true });
+
+          // Demote previous tech lead if they are not leading any other team
+          if (previousTechLeadId) {
+            const otherTeamsLed = teams.filter(
+              (t) =>
+                t.techLeadId === previousTechLeadId && t.id !== team.id
+            );
+            if (otherTeamsLed.length === 0) {
+              const previousTechLeadRef = doc(firestore, 'users', previousTechLeadId);
+              batch.update(previousTechLeadRef, { isTechLead: false });
+            }
+          }
+        }
+        await batch.commit().catch((e) => {
+           const permissionError = new FirestorePermissionError({
             path: teamDocRef.path,
             operation: 'update',
             requestResourceData: values,
@@ -125,11 +154,21 @@ function TeamForm({
           errorEmitter.emit('permission-error', permissionError);
           throw permissionError;
         });
+
         toast({ title: 'Team Updated', description: `The ${values.name} team has been updated.` });
-      } else {
+
+      } else { // Creating a new team
         const teamsCollectionRef = collection(firestore, 'teams');
-        await addDoc(teamsCollectionRef, values).catch((e) => {
-          const permissionError = new FirestorePermissionError({
+        const newTeamRef = doc(teamsCollectionRef); // Create a ref with a new ID
+        
+        batch.set(newTeamRef, values);
+
+        // Set the new tech lead's role
+        const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
+        batch.update(newTechLeadRef, { isTechLead: true });
+        
+        await batch.commit().catch((e) => {
+            const permissionError = new FirestorePermissionError({
             path: teamsCollectionRef.path,
             operation: 'create',
             requestResourceData: values,
@@ -139,6 +178,7 @@ function TeamForm({
         });
         toast({ title: 'Team Created', description: `The ${values.name} team has been created.` });
       }
+
       onFinished();
     } catch (error: any) {
       console.error('Error saving team: ', error);
@@ -150,11 +190,14 @@ function TeamForm({
     }
   };
 
-  // Filter out users who are already tech leads of other teams.
-  // If editing, the current tech lead of this team should still be in the list.
+  // Tech leads of other teams cannot be selected
+  const otherTeamsTechLeadIds = teams
+    .filter((t) => t.id !== team?.id)
+    .map((t) => t.techLeadId);
   const availableTechLeads = users.filter(
-    (user) => !user.isTechLead || user.uid === team?.techLeadId
+    (user) => !otherTeamsTechLeadIds.includes(user.uid)
   );
+
 
   return (
     <Form {...form}>
@@ -243,9 +286,19 @@ export function TeamsTable() {
     setIsFormOpen(true);
   };
 
-  const handleDelete = async () => {
+  const handleDeleteConfirm = () => {
     if (!teamToDelete) return;
+    handleDelete(teamToDelete);
+    setTeamToDelete(null);
+  };
 
+  const handleDeleteRequest = (team: Team) => {
+    setTeamToDelete(team);
+  };
+
+
+  const handleDelete = async (teamToDelete: Team) => {
+    if (!firestore) return;
     try {
       const teamDocRef = doc(firestore, 'teams', teamToDelete.id);
       await deleteDoc(teamDocRef).catch((e) => {
@@ -257,7 +310,6 @@ export function TeamsTable() {
         throw permissionError;
       });
       toast({ title: 'Team Deleted', description: `The ${teamToDelete.name} team has been deleted.` });
-      setTeamToDelete(null);
     } catch (error: any) {
       console.error('Error deleting team: ', error);
       toast({
@@ -319,7 +371,6 @@ export function TeamsTable() {
                   <TableCell className="font-medium">{team.name}</TableCell>
                   <TableCell>{usersMap.get(team.techLeadId) ?? 'N/A'}</TableCell>
                   <TableCell className="text-right">
-                    <AlertDialog>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
@@ -332,35 +383,15 @@ export function TeamsTable() {
                             <span>Edit</span>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <AlertDialogTrigger asChild>
-                            <DropdownMenuItem className="text-destructive">
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDeleteRequest(team)}
+                            >
                               <Trash2 className="mr-2 h-4 w-4" />
                               <span>Delete</span>
                             </DropdownMenuItem>
-                          </AlertDialogTrigger>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the <strong>{team.name}</strong> team.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel onClick={() => setTeamToDelete(null)}>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive hover:bg-destructive/90"
-                            onClick={() => {
-                              setTeamToDelete(team);
-                              handleDelete();
-                            }}
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
                   </TableCell>
                 </TableRow>
               ))
@@ -383,15 +414,35 @@ export function TeamsTable() {
               {selectedTeam ? 'Update the details for this team.' : 'Fill out the form to create a new team.'}
             </DialogDescription>
           </DialogHeader>
-          {usersData && (
+          {usersData && teams &&(
             <TeamForm
               team={selectedTeam}
               users={usersData}
+              teams={teams}
               onFinished={() => setIsFormOpen(false)}
             />
           )}
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!teamToDelete} onOpenChange={(open) => !open && setTeamToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the <strong>{teamToDelete?.name}</strong> team.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setTeamToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={handleDeleteConfirm}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
