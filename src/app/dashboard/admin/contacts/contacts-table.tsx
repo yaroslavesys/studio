@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   collection,
   addDoc,
@@ -52,7 +52,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Form,
   FormControl,
-  FormDescription as FormDescription,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -62,6 +62,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // --- Types ---
 interface Contact {
@@ -69,6 +70,12 @@ interface Contact {
   name: string;
   url: string;
   order: number;
+  teamId?: string;
+}
+
+interface Team {
+  id: string;
+  name: string;
 }
 
 // --- Form Schema ---
@@ -78,14 +85,17 @@ const contactFormSchema = z.object({
   }),
   url: z.string().url({ message: 'Please enter a valid URL.' }),
   order: z.coerce.number().int(),
+  teamId: z.string().optional(),
 });
 
 // --- Edit/Create Contact Form ---
 function ContactForm({
   contact,
+  teams,
   onFinished,
 }: {
   contact?: Contact;
+  teams: Team[];
   onFinished: () => void;
 }) {
   const firestore = useFirestore();
@@ -98,20 +108,26 @@ function ContactForm({
       name: contact?.name || '',
       url: contact?.url || '',
       order: contact?.order || 0,
+      teamId: contact?.teamId || '',
     },
   });
 
   const onSubmit = async (values: z.infer<typeof contactFormSchema>) => {
     if (!firestore) return;
 
+    const updateData: any = { ...values };
+    if (updateData.teamId === '' || updateData.teamId === 'global') {
+      updateData.teamId = null;
+    }
+
     try {
       if (isEditing) {
         const contactDocRef = doc(firestore, 'contacts', contact.id);
-        await updateDoc(contactDocRef, values).catch((e) => {
+        await updateDoc(contactDocRef, updateData).catch((e) => {
            const permissionError = new FirestorePermissionError({
             path: contactDocRef.path,
             operation: 'update',
-            requestResourceData: values,
+            requestResourceData: updateData,
           });
           errorEmitter.emit('permission-error', permissionError);
           throw permissionError;
@@ -121,11 +137,11 @@ function ContactForm({
 
       } else { // Creating
         const contactsCollectionRef = collection(firestore, 'contacts');
-        await addDoc(contactsCollectionRef, values).catch((e) => {
+        await addDoc(contactsCollectionRef, updateData).catch((e) => {
             const permissionError = new FirestorePermissionError({
             path: contactsCollectionRef.path,
             operation: 'create',
-            requestResourceData: values,
+            requestResourceData: updateData,
           });
           errorEmitter.emit('permission-error', permissionError);
           throw permissionError;
@@ -174,6 +190,37 @@ function ContactForm({
             </FormItem>
           )}
         />
+         <FormField
+          control={form.control}
+          name="teamId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Team</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                defaultValue={field.value || 'global'}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Assign to a team" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="global">For All Teams</SelectItem>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Assign this link to a specific team, or make it visible to everyone.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <FormField
           control={form.control}
           name="order"
@@ -213,8 +260,21 @@ export function ContactsTable() {
     if (!firestore) return null;
     return query(collection(firestore, 'contacts'), orderBy('order'));
   }, [firestore]);
+  
+  const teamsCollection = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'teams');
+  }, [firestore]);
 
-  const { data: contacts, isLoading, error } = useCollection<Contact>(contactsCollection);
+
+  const { data: contacts, isLoading: isLoadingContacts, error: contactsError } = useCollection<Contact>(contactsCollection);
+  const { data: teams, isLoading: isLoadingTeams, error: teamsError } = useCollection<Team>(teamsCollection);
+
+  const teamsMap = useMemo(() => {
+    if (!teams) return new Map<string, string>();
+    return new Map(teams.map((team) => [team.id, team.name]));
+  }, [teams]);
+
 
   const handleCreate = () => {
     setSelectedContact(undefined);
@@ -259,6 +319,9 @@ export function ContactsTable() {
       });
     }
   };
+  
+  const isLoading = isLoadingContacts || isLoadingTeams;
+  const error = contactsError || teamsError;
 
   if (isLoading) {
     return (
@@ -298,6 +361,7 @@ export function ContactsTable() {
               <TableHead>Order</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>URL</TableHead>
+              <TableHead>Team</TableHead>
               <TableHead className="w-[50px] text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -308,6 +372,7 @@ export function ContactsTable() {
                   <TableCell>{contact.order}</TableCell>
                   <TableCell className="font-medium">{contact.name}</TableCell>
                   <TableCell><a href={contact.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{contact.url}</a></TableCell>
+                  <TableCell>{contact.teamId ? teamsMap.get(contact.teamId) : 'All Teams'}</TableCell>
                   <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -335,7 +400,7 @@ export function ContactsTable() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={4} className="text-center">
+                <TableCell colSpan={5} className="text-center">
                   No contacts found.
                 </TableCell>
               </TableRow>
@@ -352,10 +417,13 @@ export function ContactsTable() {
               {selectedContact ? 'Update the details for this link.' : 'Fill out the form to create a new link.'}
             </DialogDescription>
           </DialogHeader>
-          <ContactForm
-              contact={selectedContact}
-              onFinished={() => setIsFormOpen(false)}
-            />
+           {teams && (
+            <ContactForm
+                contact={selectedContact}
+                teams={teams}
+                onFinished={() => setIsFormOpen(false)}
+              />
+           )}
         </DialogContent>
       </Dialog>
       <AlertDialog open={!!contactToDelete} onOpenChange={(open) => !open && setContactToDelete(null)}>

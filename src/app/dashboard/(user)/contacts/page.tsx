@@ -1,6 +1,6 @@
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import {
   Card,
   CardContent,
@@ -8,26 +8,54 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { collection, orderBy, query } from 'firebase/firestore';
+import { collection, doc, getDoc, orderBy, query } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowUpRight, HelpCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface Contact {
     id: string;
     name: string;
     url: string;
     order: number;
+    teamId?: string;
+}
+
+interface UserProfile {
+    teamId?: string;
 }
 
 export default function ContactsPage() {
   const firestore = useFirestore();
+  const { user } = useUser();
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if(!user || !firestore) return;
+    const fetchProfile = async () => {
+      const userDocRef = doc(firestore, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        setUserProfile(userDoc.data() as UserProfile);
+      }
+    };
+    fetchProfile();
+  }, [user, firestore]);
 
   const contactsQuery = useMemoFirebase(() => {
     if(!firestore) return null;
     return query(collection(firestore, 'contacts'), orderBy('order'));
   }, [firestore]);
 
-  const { data: contacts, isLoading: isLoadingContacts } = useCollection<Contact>(contactsQuery);
+  const { data: allContacts, isLoading: isLoadingContacts } = useCollection<Contact>(contactsQuery);
+
+  const filteredContacts = useMemo(() => {
+    if (!allContacts) return [];
+    // Show global contacts and contacts for the user's team
+    return allContacts.filter(contact => !contact.teamId || contact.teamId === userProfile?.teamId);
+  }, [allContacts, userProfile]);
+
+  const isLoading = isLoadingContacts || !userProfile;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -39,10 +67,10 @@ export default function ContactsPage() {
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                {isLoadingContacts ? (
+                {isLoading ? (
                     <Skeleton className="h-24 w-full" />
-                ) : contacts && contacts.length > 0 ? (
-                    contacts.map(contact => (
+                ) : filteredContacts && filteredContacts.length > 0 ? (
+                    filteredContacts.map(contact => (
                          <a href={contact.url} target="_blank" rel="noopener noreferrer" key={contact.id}>
                             <Card  className="flex items-center justify-between p-4 transition-all hover:bg-accent hover:text-accent-foreground">
                                 <h3 className="font-semibold">{contact.name}</h3>

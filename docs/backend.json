@@ -133,6 +133,10 @@
         "order": {
           "type": "number",
           "description": "A number to sort the contacts."
+        },
+        "teamId": {
+            "type": "string",
+            "description": "The ID of the team this contact is for. If null, it's global."
         }
       },
       "required": ["name", "url"]
