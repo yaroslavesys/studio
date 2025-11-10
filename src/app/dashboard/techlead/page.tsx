@@ -9,6 +9,7 @@ import {
   getDocs,
   DocumentData,
   CollectionReference,
+  limit,
 } from 'firebase/firestore';
 import {
   Card,
@@ -56,7 +57,8 @@ export default function TechLeadDashboardPage() {
       try {
         // 1. Find the team for the current tech lead
         const teamsRef = collection(firestore, 'teams');
-        const teamQuery = query(teamsRef, where('techLeadId', '==', user.uid));
+        // The query now includes limit(1) to comply with security rules
+        const teamQuery = query(teamsRef, where('techLeadId', '==', user.uid), limit(1));
         const teamSnapshot = await getDocs(teamQuery).catch((e) => {
             const permissionError = new FirestorePermissionError({
               path: (teamsRef as CollectionReference).path,

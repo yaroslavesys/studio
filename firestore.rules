@@ -67,8 +67,12 @@ service cloud.firestore {
     match /teams/{teamId} {
       // Admins can read any team. TechLeads can ONLY read their own team document.
       allow get: if isSignedIn() && (isAdmin() || isTeamTechLead(teamId));
-      // Admins can list all teams. TechLeads can query for their own team.
+      
+      // Admins can list all teams. 
+      // TechLeads can query for their own team, but only if they request exactly one document.
+      // This prevents them from listing all teams.
       allow list: if isSignedIn() && (isAdmin() || (isTechLead() && request.query.limit <= 1));
+      
       allow create, update, delete: if isAdmin();
     }
   }
