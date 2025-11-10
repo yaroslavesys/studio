@@ -20,6 +20,7 @@ export function UserNav({ user }: { user: User & { avatarUrl: string } }) {
   const handleSignOut = async () => {
     if (auth) {
       await auth.signOut();
+      // Force a reload to ensure all state is cleared and user is redirected to login.
       window.location.href = '/';
     }
   };

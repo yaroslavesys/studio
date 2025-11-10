@@ -78,16 +78,12 @@ export default function DashboardLayout({
     const setupUser = async () => {
       setIsSeedingOrCreating(true);
       await checkAndSeedDatabase(firestore);
-      if (!realAppUserFromDb) {
-        const createdProfile = await createUserProfile(firestore, firebaseUser);
-        setLocalAppUser(createdProfile);
-      } else {
-        setLocalAppUser(realAppUserFromDb);
-      }
+      const userProfile = await createUserProfile(firestore, firebaseUser);
+      setLocalAppUser(userProfile);
       setIsSeedingOrCreating(false);
     };
     setupUser();
-  }, [firestore, firebaseUser, isUserLoading, realAppUserFromDb, router]);
+  }, [firestore, firebaseUser, isUserLoading, router]);
 
 
   const isAppUserLoading = isAppUserLoadingFromHook || isSeedingOrCreating;

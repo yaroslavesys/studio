@@ -9,14 +9,14 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
-import { useFirebase } from '@/firebase';
+import { useAuth } from '@/firebase';
 import { GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
-  const { auth } = useFirebase();
+  const auth = useAuth();
   const router = useRouter();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const { toast } = useToast();
@@ -24,41 +24,53 @@ export default function LoginPage() {
   useEffect(() => {
     if (!auth) return;
 
-    setIsSigningIn(true);
+    // This is the crucial part for handling the redirect back from Google.
     getRedirectResult(auth)
       .then((result) => {
         if (result && result.user) {
+          // User has successfully signed in. Redirect to dashboard.
           router.push('/dashboard');
-        } else {
-          setIsSigningIn(false);
         }
+        // If result is null, it means the user just landed on the page
+        // without a redirect. Do nothing and let them click the button.
       })
       .catch((error) => {
         console.error('Error getting redirect result:', error);
         toast({
           variant: 'destructive',
           title: 'Sign-in Failed',
-          description: 'Could not complete sign-in. Please try again.',
+          description: error.message || 'Could not complete sign-in. Please try again.',
         });
+      })
+      .finally(() => {
         setIsSigningIn(false);
       });
+
   }, [auth, router, toast]);
 
   const handleSignIn = async () => {
-    if (!auth) return;
+    if (!auth) {
+       toast({
+        variant: "destructive",
+        title: "Sign-in Failed",
+        description: "Authentication service is not available. Please try again later.",
+      });
+      return;
+    }
     
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
+      // signInWithRedirect will navigate away, the useEffect hook will handle the return.
       await signInWithRedirect(auth, provider);
     } catch (error) {
       console.error('Error starting sign-in redirect: ', error);
       toast({
         variant: "destructive",
         title: "Sign-in Failed",
-        description: "An error occurred during the sign-in process.",
+        description: (error as Error).message || "An error occurred during the sign-in process.",
       });
       setIsSigningIn(false);
     } 
