@@ -16,8 +16,9 @@ import {
 import { LogOut, Shield, Users, Briefcase } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { signOut } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Logo } from '@/components/logo';
+import Link from 'next/link';
 
 export default function TechLeadDashboardLayout({
   children,
@@ -27,6 +28,7 @@ export default function TechLeadDashboardLayout({
   const { user } = useUser();
   const auth = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleSignOut = async () => {
     if (auth) {
@@ -47,10 +49,12 @@ export default function TechLeadDashboardLayout({
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/techlead" isActive>
-                <Briefcase />
-                My Team
-              </SidebarMenuButton>
+              <Link href="/dashboard/techlead" passHref>
+                <SidebarMenuButton asChild isActive={pathname === '/dashboard/techlead'}>
+                  <Briefcase />
+                  My Team
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
