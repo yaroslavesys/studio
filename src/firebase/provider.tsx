@@ -13,20 +13,6 @@ import { Firestore, getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 
-// --- Initialization ---
-function initializeFirebaseServices(): {
-  firebaseApp: FirebaseApp;
-  auth: Auth;
-  firestore: Firestore;
-} {
-  const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  return {
-    firebaseApp: app,
-    auth: getAuth(app),
-    firestore: getFirestore(app),
-  };
-}
-
 // --- Context and Provider ---
 export interface FirebaseContextState {
   firebaseApp: FirebaseApp | null;
@@ -56,13 +42,21 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
     userError: null,
   });
 
-  // Memoize services to prevent re-initialization
-  const { firebaseApp, auth, firestore } = useMemo(() => {
+  const services = useMemo(() => {
     if (typeof window === 'undefined') {
       return { firebaseApp: null, auth: null, firestore: null };
     }
-    return initializeFirebaseServices();
+    // This is the most reliable way: always initialize.
+    // getApps()/getApp() has proven unreliable in this environment.
+    const app = initializeApp(firebaseConfig);
+    return {
+      firebaseApp: app,
+      auth: getAuth(app),
+      firestore: getFirestore(app),
+    };
   }, []);
+
+  const { firebaseApp, auth, firestore } = services;
 
   useEffect(() => {
     if (!auth) {
