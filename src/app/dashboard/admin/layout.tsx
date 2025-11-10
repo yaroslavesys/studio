@@ -49,30 +49,26 @@ export default function AdminDashboardLayout({
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Link href="/dashboard/admin">
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === '/dashboard/admin'}
-                >
-                  <a>
-                    <Users />
-                    Users
-                  </a>
-                </SidebarMenuButton>
-              </Link>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === '/dashboard/admin'}
+              >
+                <Link href="/dashboard/admin">
+                  <Users />
+                  Users
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/dashboard/admin/teams">
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname.startsWith('/dashboard/admin/teams')}
-                >
-                  <a>
-                    <Briefcase />
-                    Teams
-                  </a>
-                </SidebarMenuButton>
-              </Link>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname.startsWith('/dashboard/admin/teams')}
+              >
+                <Link href="/dashboard/admin/teams">
+                  <Briefcase />
+                  Teams
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
