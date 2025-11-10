@@ -11,8 +11,9 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { signOut } from 'firebase/auth';
+import { Shield } from 'lucide-react';
 
-export default function DashboardPage() {
+export default function AdminDashboardPage() {
   const router = useRouter();
   const auth = useAuth();
   const { user, isLoading } = useUser();
@@ -35,11 +36,13 @@ export default function DashboardPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>User Dashboard</CardTitle>
-          <CardDescription>Welcome, regular user {user.email}</CardDescription>
+        <CardHeader className="items-center text-center">
+          <Shield className="h-12 w-12 text-primary" />
+          <CardTitle>Admin Dashboard</CardTitle>
+          <CardDescription>Welcome, administrator {user.email}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-2">
+          <p className="text-center text-sm text-muted-foreground">You have special privileges.</p>
           <Button onClick={handleSignOut} variant="outline">
             Sign Out
           </Button>

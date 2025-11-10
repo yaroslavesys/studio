@@ -22,9 +22,13 @@
           "type": "string",
           "format": "uri",
           "description": "URL for the user's profile picture."
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "description": "Flag to indicate if the user is an administrator."
         }
       },
-      "required": ["uid", "email"]
+      "required": ["uid", "email", "isAdmin"]
     }
   },
   "auth": {

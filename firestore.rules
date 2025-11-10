@@ -12,13 +12,28 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
+    // Returns true if the user's profile in firestore has isAdmin: true
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
     // USERS
-    // Users can create their own document upon signing up.
-    // They can read, update, and delete their own document.
+    // Users can read their own document.
+    // Admins can read any user document.
     // No one can list all users.
     match /users/{userId} {
-      allow read, update, delete: if isSignedIn() && isOwner(userId);
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      
+      // Users can create their own profile.
       allow create: if isSignedIn();
+
+      // Users can update their own profile, but they CANNOT make themselves an admin.
+      // Admins can update any user profile.
+      allow update: if isSignedIn() && 
+        (isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin) || isAdmin();
+      
+      // Only admins can delete users.
+      allow delete: if isAdmin();
       allow list: if false;
     }
   }

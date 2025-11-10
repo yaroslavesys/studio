@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
+import { doc, getDoc, setDoc, getFirestore, collection, getDocs } from 'firebase/firestore';
 
 export default function HomePage() {
   const router = useRouter();
@@ -40,15 +41,36 @@ export default function HomePage() {
     }
     const provider = new GoogleAuthProvider();
     try {
-      // Use signInWithPopup instead of signInWithRedirect
-      await signInWithPopup(auth, provider);
-      // The useEffect hook will handle the redirect after successful login.
+      const result = await signInWithPopup(auth, provider);
+      await createUserProfile(result.user);
+      router.push('/dashboard');
     } catch (error) {
       console.error('Error during sign-in: ', error);
       toast({
         variant: 'destructive',
         title: 'Uh oh! Something went wrong.',
         description: 'There was a problem with the sign-in process.',
+      });
+    }
+  };
+
+  const createUserProfile = async (user: User) => {
+    const firestore = getFirestore();
+    const userDocRef = doc(firestore, 'users', user.uid);
+    const userDoc = await getDoc(userDocRef);
+
+    if (!userDoc.exists()) {
+      // Check if this is the first user
+      const usersCollectionRef = collection(firestore, 'users');
+      const allUsersSnapshot = await getDocs(usersCollectionRef);
+      const isFirstUser = allUsersSnapshot.empty;
+
+      await setDoc(userDocRef, {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        isAdmin: isFirstUser, // First user becomes admin
       });
     }
   };
