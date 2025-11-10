@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/card';
 import { signOut } from 'firebase/auth';
 import { collection, doc, getDoc, query, where, getDocs, DocumentData, addDoc, serverTimestamp } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AlertCircle, HelpCircle } from 'lucide-react';
