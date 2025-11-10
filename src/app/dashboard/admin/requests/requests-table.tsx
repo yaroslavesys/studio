@@ -9,7 +9,7 @@ import {
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useUser } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -121,23 +121,24 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
 };
 
 
-export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Query | null, userProfile?: UserProfile | null }) {
+export function RequestsTable({ 
+  requestsQuery, 
+  userProfile, 
+  usersMap, 
+  servicesMap 
+}: { 
+  requestsQuery: Query | null, 
+  userProfile?: UserProfile | null,
+  usersMap: Map<string, UserProfile>,
+  servicesMap: Map<string, string>,
+}) {
   const firestore = useFirestore();
   const { user: currentUser } = useUser();
   const { toast } = useToast();
   
   const [requestToReject, setRequestToReject] = useState<AccessRequest | null>(null);
 
-  const { data: requests, isLoading: isLoadingRequests, error: requestsError } = useCollection<AccessRequest>(requestsQuery);
-
-  const servicesCollection = useMemoFirebase(() => firestore ? collection(firestore, 'services') : null, [firestore]);
-  const usersCollection = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  
-  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesCollection);
-  const { data: users, isLoading: isLoadingUsers } = useCollection<UserProfile>(usersCollection);
-
-  const servicesMap = useMemo(() => services ? new Map(services.map(s => [s.id, s.name])) : new Map(), [services]);
-  const usersMap = useMemo(() => users ? new Map(users.map(u => [u.uid, u])) : new Map(), [users]);
+  const { data: requests, isLoading, error } = useCollection<AccessRequest>(requestsQuery);
 
   const handleUpdateStatus = async (request: AccessRequest, newStatus: AccessRequest['status']) => {
     if (!firestore || !currentUser) return;
@@ -188,9 +189,6 @@ export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Q
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
-
-  const isLoading = isLoadingRequests || isLoadingServices || isLoadingUsers;
-  const error = requestsError;
 
   if (isLoading) {
     return <Skeleton className="h-48 w-full" />;
