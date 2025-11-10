@@ -13,11 +13,12 @@ import {
   SidebarFooter,
   SidebarInset,
 } from '@/components/ui/sidebar';
-import { LogOut, Shield } from 'lucide-react';
+import { LogOut, Shield, Mail, Archive, LayoutDashboard, Briefcase } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { signOut } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Logo } from '@/components/logo';
+import Link from 'next/link';
 
 export default function UserDashboardLayout({
   children,
@@ -27,6 +28,7 @@ export default function UserDashboardLayout({
   const { user } = useUser();
   const auth = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleSignOut = async () => {
     if (auth) {
@@ -45,7 +47,52 @@ export default function UserDashboardLayout({
           </div>
         </SidebarHeader>
         <SidebarContent>
-          {/* Add user-specific navigation here if needed */}
+           <SidebarMenu>
+             <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === '/dashboard'}
+              >
+                <Link href="/dashboard">
+                  <LayoutDashboard />
+                  Dashboard
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname.startsWith('/dashboard/accesses')}
+              >
+                <Link href="/dashboard/accesses">
+                  <Briefcase />
+                  Available Accesses
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname.startsWith('/dashboard/requests')}
+              >
+                <Link href="/dashboard/requests">
+                  <Archive />
+                  My Requests
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname.startsWith('/dashboard/contacts')}
+              >
+                <Link href="/dashboard/contacts">
+                  <Mail />
+                  Contacts
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
           {user && (
