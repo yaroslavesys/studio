@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { signOut } from 'firebase/auth';
 import { usePathname, useRouter } from 'next/navigation';
 import { Logo } from '@/components/logo';
+import Link from 'next/link';
 
 export default function AdminDashboardLayout({
   children,
@@ -48,22 +49,26 @@ export default function AdminDashboardLayout({
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton
-                href="/dashboard/admin"
-                isActive={pathname === '/dashboard/admin'}
-              >
-                <Users />
-                Users
-              </SidebarMenuButton>
+              <Link href="/dashboard/admin" passHref>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === '/dashboard/admin'}
+                >
+                  <Users />
+                  Users
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton
-                href="/dashboard/admin/teams"
-                isActive={pathname.startsWith('/dashboard/admin/teams')}
-              >
-                <Briefcase />
-                Teams
-              </SidebarMenuButton>
+              <Link href="/dashboard/admin/teams" passHref>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith('/dashboard/admin/teams')}
+                >
+                  <Briefcase />
+                  Teams
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
