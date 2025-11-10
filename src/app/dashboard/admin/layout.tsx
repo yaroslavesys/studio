@@ -59,7 +59,7 @@ export default function AdminDashboardLayout({
             <SidebarMenuItem>
               <SidebarMenuButton
                 href="/dashboard/admin/teams"
-                isActive={pathname === '/dashboard/admin/teams'}
+                isActive={pathname.startsWith('/dashboard/admin/teams')}
               >
                 <Briefcase />
                 Teams
