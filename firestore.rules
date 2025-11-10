@@ -45,14 +45,15 @@ service cloud.firestore {
        allow read: if isSignedIn() && (isOwner(userId) || isAdmin() || isUserInTechLeadTeam(userId));
       
       // Users can create their own profile.
-      // The `isAdmin` field can only be set to true if the user's email matches the admin email. Otherwise, it must be false.
-      // The `isTechLead` field can only be set to true if the user's email matches the tech lead email. Otherwise, it must be false.
+      // The `isAdmin` and `isTechLead` fields must be false unless set by specific emails.
+      // This prevents users from making themselves admins or tech leads on signup.
       allow create: if isSignedIn() && isOwner(userId) &&
-        (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') || request.resource.data.isAdmin == false) &&
-        (request.resource.data.isTechLead == (request.auth.token.email == 'yaroslav_system.admin@newdevils.net') || request.resource.data.isTechLead == false);
+        (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') && request.resource.data.isAdmin == true || request.resource.data.isAdmin == false) &&
+        (request.resource.data.isTechLead == (request.auth.token.email == 'yaroslav_system.admin@newdevils.net') && request.resource.data.isTechLead == true || request.resource.data.isTechLead == false);
+        
 
       // Users can update their own profile, but they CANNOT make themselves an admin or tech lead.
-      // Admins can update any user profile.
+      // Admins can update any user profile, including roles and team assignments.
       allow update: if isSignedIn() && 
         ((isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin && request.resource.data.isTechLead == resource.data.isTechLead) || isAdmin());
       
@@ -73,6 +74,7 @@ service cloud.firestore {
       // This prevents them from listing all teams.
       allow list: if isSignedIn() && (isAdmin() || (isTechLead() && request.query.limit <= 1));
       
+      // Only Admins can create, update, or delete teams.
       allow create, update, delete: if isAdmin();
     }
   }
