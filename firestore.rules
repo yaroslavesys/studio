@@ -100,21 +100,40 @@ service cloud.firestore {
     // REQUESTS
     match /requests/{requestId} {
       // Users can create their own requests.
-      // The request must be for the user themselves.
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // The request must be for the user themselves and start in 'pending' state.
+      allow create: if isSignedIn() && 
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.status == 'pending';
       
       // Users can read their own requests.
       // Admins can read any request.
       // TechLeads can read requests from users in their team.
-      function isRequestFromTechLeadTeam(requestId) {
-        let requestUserId = get(/databases/$(database)/documents/requests/$(requestId)).data.userId;
+      function isRequestFromTechLeadTeam(requestDoc) {
+        let requestUserId = requestDoc.data.userId;
         return isUserInTechLeadTeam(requestUserId);
       }
-      allow get: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isRequestFromTechLeadTeam(requestId));
+      allow get: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isRequestFromTechLeadTeam(resource));
       
-      // Admins and relevant TechLeads can update (approve/reject) requests.
-      // Users cannot update their own requests.
-      allow update: if isSignedIn() && (isAdmin() || isRequestFromTechLeadTeam(requestId));
+      // Admins and relevant TechLeads can update requests according to the workflow.
+      allow update: if isSignedIn() && 
+        (
+          // Case 1: TechLead approves a pending request for their team member.
+          (isTechLead() && 
+           resource.data.status == 'pending' && 
+           (request.resource.data.status == 'approved_by_tech_lead' || request.resource.data.status == 'rejected') &&
+           isRequestFromTechLeadTeam(resource)
+          ) ||
+          // Case 2: Admin completes a request that was approved by a tech lead.
+          (isAdmin() &&
+           resource.data.status == 'approved_by_tech_lead' &&
+           (request.resource.data.status == 'completed' || request.resource.data.status == 'rejected')
+          ) ||
+          // Case 3: Admin directly approves or rejects a pending request.
+          (isAdmin() &&
+            resource.data.status == 'pending' &&
+            (request.resource.data.status == 'approved_by_tech_lead' || request.resource.data.status == 'rejected')
+          )
+        );
       
       // Only admins can delete requests.
       allow delete: if isAdmin();
