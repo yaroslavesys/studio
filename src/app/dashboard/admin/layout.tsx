@@ -56,18 +56,20 @@ export default function AdminDashboardLayout({
         </SidebarContent>
         <SidebarFooter>
           {user && (
-            <div className="flex items-center gap-2 p-2">
+            <div className="flex min-w-0 items-center gap-2 p-2">
               <Avatar className="h-8 w-8">
                 <AvatarImage src={user.photoURL ?? undefined} />
                 <AvatarFallback>
                   {user.email?.[0].toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col text-sm">
-                <span className="font-medium text-foreground">
+              <div className="flex min-w-0 flex-col text-sm">
+                <span className="truncate font-medium text-foreground">
                   {user.displayName}
                 </span>
-                <span className="text-muted-foreground">{user.email}</span>
+                <span className="truncate text-muted-foreground">
+                  {user.email}
+                </span>
               </div>
             </div>
           )}
