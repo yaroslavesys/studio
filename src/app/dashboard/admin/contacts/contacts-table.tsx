@@ -52,6 +52,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Form,
   FormControl,
+  FormDescription as FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -182,6 +183,9 @@ function ContactForm({
                <FormControl>
                 <Input type="number" placeholder="0" {...field} />
               </FormControl>
+              <FormDescription>
+                Lower numbers appear higher in the list.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
