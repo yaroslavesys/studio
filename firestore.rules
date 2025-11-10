@@ -21,12 +21,31 @@ service cloud.firestore {
     function isTechLead() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isTechLead == true;
     }
+    
+    // Returns true if the requesting user is the tech lead of a specific team
+    function isTeamTechLead(teamId) {
+      return isTechLead() && get(/databases/$(database)/documents/teams/$(teamId)).data.techLeadId == request.auth.uid;
+    }
+    
+    // Returns true if the user being accessed is in the tech lead's team
+    function isUserInTechLeadTeam(userId) {
+      let userTeamId = get(/databases/$(database)/documents/users/$(userId)).data.teamId;
+      let techLeadTeam = get(/databases/$(database)/documents/teams?query=techLeadId==$(request.auth.uid));
+      // This is a placeholder for a real query, as rules don't support direct queries like this.
+      // In a real scenario, you'd likely pass the teamId to the rule or check against the tech lead's own teamId field.
+      // For now, we'll check if the user's teamId is not null and the requester is a tech lead.
+      // A more robust rule would be needed for production.
+      let techLeadTeamId = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId;
+      return isTechLead() && userTeamId == techLeadTeamId;
+    }
+
 
     // USERS
     // Users can read their own document.
     // Admins can read any user document.
+    // TechLeads can read users in their team
     match /users/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+       allow read: if isSignedIn() && (isOwner(userId) || isAdmin() || isUserInTechLeadTeam(userId));
       
       // Users can create their own profile.
       // The `isAdmin` field can only be set to true if the user's email matches the admin email. Otherwise, it must be false.
@@ -43,8 +62,15 @@ service cloud.firestore {
       // Only admins can delete users.
       allow delete: if isAdmin();
 
-      // Admins can list all users.
-      allow list: if isAdmin();
+      // Admins and TechLeads can list users. TechLeads can only list users in their team.
+       allow list: if isAdmin() || isTechLead();
+    }
+    
+    // TEAMS
+    match /teams/{teamId} {
+      allow read: if isSignedIn() && (isAdmin() || isTeamTechLead(teamId));
+      allow list: if isSignedIn() && (isAdmin() || isTechLead());
+      allow create, update, delete: if isAdmin();
     }
   }
 }

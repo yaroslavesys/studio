@@ -30,9 +30,29 @@
         "isTechLead": {
           "type": "boolean",
           "description": "Flag to indicate if the user is a tech lead."
+        },
+        "teamId": {
+          "type": "string",
+          "description": "The ID of the team the user belongs to."
         }
       },
       "required": ["uid", "email", "isAdmin", "isTechLead"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Represents a team of users.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the team."
+        },
+        "techLeadId": {
+          "type": "string",
+          "description": "The UID of the user who is the tech lead of this team."
+        }
+      },
+      "required": ["name", "techLeadId"]
     }
   },
   "auth": {
@@ -46,6 +66,12 @@
         "$ref": "#/entities/UserProfile"
       },
       "description": "Stores public profiles for all users."
+    },
+    "/teams/{teamId}": {
+      "schema": {
+        "$ref": "#/entities/Team"
+      },
+      "description": "Stores information about teams."
     }
   }
 }
