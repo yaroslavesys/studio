@@ -49,24 +49,28 @@ export default function AdminDashboardLayout({
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Link href="/dashboard/admin" passHref>
+              <Link href="/dashboard/admin" passHref legacyBehavior>
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === '/dashboard/admin'}
                 >
-                  <Users />
-                  Users
+                  <a>
+                    <Users />
+                    Users
+                  </a>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/dashboard/admin/teams" passHref>
+              <Link href="/dashboard/admin/teams" passHref legacyBehavior>
                 <SidebarMenuButton
                   asChild
                   isActive={pathname.startsWith('/dashboard/admin/teams')}
                 >
-                  <Briefcase />
-                  Teams
+                  <a>
+                    <Briefcase />
+                    Teams
+                  </a>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
