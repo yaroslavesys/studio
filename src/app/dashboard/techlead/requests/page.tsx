@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Card,
@@ -7,7 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { RequestsTable } from '../../admin/requests/requests-table'; // Re-use the same table component
-import { useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { useFirestore, useUser, useMemoFirebase, useCollection, useDoc } from '@/firebase';
 import { collection, query, where, getDocs, doc, getDoc, orderBy } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,34 +19,41 @@ interface Team {
   id: string;
 }
 
+interface UserProfile {
+  uid: string;
+  isAdmin?: boolean;
+  isTechLead?: boolean;
+  teamId?: string;
+}
+
 export default function TechLeadRequestsPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const [team, setTeam] = useState<Team | null>(null);
   const [isLoadingTeam, setIsLoadingTeam] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const userProfileRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+
+  const { data: userProfile, isLoading: isLoadingProfile } = useDoc<UserProfile>(userProfileRef);
 
   useEffect(() => {
-    if (!user || !firestore) return;
+    if (!userProfile) return;
     const fetchTeam = async () => {
       setIsLoadingTeam(true);
       setError(null);
-      try {
-        const userProfileRef = doc(firestore, 'users', user.uid);
-        const userProfileSnap = await getDoc(userProfileRef);
-        if (userProfileSnap.exists() && userProfileSnap.data().teamId) {
-          setTeam({ id: userProfileSnap.data().teamId });
+       if (userProfile && userProfile.teamId) {
+          setTeam({ id: userProfile.teamId });
         } else {
           setError("You don't seem to be assigned to a team.");
         }
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setIsLoadingTeam(false);
-      }
+      setIsLoadingTeam(false);
     };
     fetchTeam();
-  }, [user, firestore]);
+  }, [userProfile]);
 
   const teamMembersQuery = useMemoFirebase(() => {
     if (!firestore || !team) return null;
@@ -57,14 +65,16 @@ export default function TechLeadRequestsPage() {
   const teamRequestsQuery = useMemoFirebase(() => {
     if (!firestore || !teamMembers || teamMembers.length === 0) return null;
     const memberIds = teamMembers.map(m => m.id);
+    // Tech lead only acts on pending requests
     return query(
       collection(firestore, 'requests'),
       where('userId', 'in', memberIds),
+      where('status', '==', 'pending'),
       orderBy('requestedAt', 'desc')
     );
   }, [firestore, teamMembers]);
   
-  if (isLoadingTeam || isLoadingMembers) {
+  if (isLoadingProfile || isLoadingTeam || isLoadingMembers) {
     return (
         <Card>
             <CardHeader>
@@ -88,19 +98,18 @@ export default function TechLeadRequestsPage() {
     );
   }
 
-
   return (
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
           <CardTitle>Team Access Requests</CardTitle>
           <CardDescription>
-            Review and manage access requests from your team members.
+            Review and manage access requests from your team members that are awaiting your approval.
           </CardDescription>
         </CardHeader>
         <CardContent>
             {/* We pass the specific query for team requests to the generic table */}
-            <RequestsTable requestsQuery={teamRequestsQuery} />
+            <RequestsTable requestsQuery={teamRequestsQuery} userProfile={userProfile} />
         </CardContent>
       </Card>
     </div>

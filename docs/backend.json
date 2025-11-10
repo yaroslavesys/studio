@@ -92,7 +92,7 @@
         },
         "status": {
           "type": "string",
-          "enum": ["pending", "approved", "rejected"],
+          "enum": ["pending", "approved_by_tech_lead", "completed", "rejected"],
           "description": "The current status of the request."
         },
         "requestedAt": {

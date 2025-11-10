@@ -27,7 +27,7 @@ interface AccessRequest {
     id: string;
     userId: string;
     serviceId: string;
-    status: 'pending' | 'approved' | 'rejected';
+    status: 'pending' | 'approved_by_tech_lead' | 'completed' | 'rejected';
     requestedAt: any; // Firestore Timestamp
     serviceName?: string; // Populated client-side
     resolvedAt?: any;
@@ -55,6 +55,21 @@ export default function RequestsPage() {
     if (!services) return new Map<string, string>();
     return new Map(services.map(s => [s.id, s.name]));
   }, [services]);
+  
+  const getStatusBadge = (status: AccessRequest['status']) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="secondary">Pending Tech Lead</Badge>;
+      case 'approved_by_tech_lead':
+        return <Badge variant="outline" className="border-yellow-500 text-yellow-500">Pending Admin</Badge>;
+      case 'completed':
+        return <Badge variant="default">Completed</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive">Rejected</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
 
   const userRequests = useMemo(() => {
     if (!userRequestsData || !servicesMap) return [];
@@ -99,11 +114,9 @@ export default function RequestsPage() {
                                     <TableCell>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Badge variant={
-                                                    req.status === 'approved' ? 'default' :
-                                                    req.status === 'rejected' ? 'destructive' :
-                                                    'secondary'
-                                                } className={req.notes ? "cursor-help" : ""}>{req.status}</Badge>
+                                                <div className={req.notes ? "cursor-help" : ""}>
+                                                    {getStatusBadge(req.status)}
+                                                </div>
                                             </TooltipTrigger>
                                             {req.notes && (
                                                 <TooltipContent>

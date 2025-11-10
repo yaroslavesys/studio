@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -37,7 +38,7 @@ interface Service {
 interface AccessRequest {
     id: string;
     serviceId: string;
-    status: 'pending' | 'approved' | 'rejected';
+    status: 'pending' | 'approved_by_tech_lead' | 'completed' | 'rejected';
 }
 
 
@@ -97,14 +98,14 @@ export default function AccessesPage() {
     if (!user || !firestore) return;
 
     const existingRequest = userRequestsData?.find(
-        (req) => req.serviceId === service.id && (req.status === 'pending' || req.status === 'approved')
+        (req) => req.serviceId === service.id && (req.status === 'pending' || req.status === 'approved_by_tech_lead' || req.status === 'completed')
     );
 
     if (existingRequest) {
         toast({
             variant: "default",
             title: "Request Exists",
-            description: `You already have a(n) ${existingRequest.status} request for ${service.name}.`,
+            description: `You already have an active or completed request for ${service.name}.`,
         });
         return;
     }
@@ -120,7 +121,7 @@ export default function AccessesPage() {
         .then(() => {
              toast({
                 title: "Request Submitted",
-                description: `Your request for ${service.name} has been submitted.`,
+                description: `Your request for ${service.name} has been submitted for tech lead approval.`,
             });
         })
         .catch((e) => {
@@ -139,7 +140,6 @@ export default function AccessesPage() {
 };
 
   const isLoading = isLoadingProfile || isLoadingServices;
-  const isRegularUserWithNoServices = !profile?.isAdmin && (!team || !team.availableServiceIds || team.availableServiceIds.length === 0);
 
   return (
      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
