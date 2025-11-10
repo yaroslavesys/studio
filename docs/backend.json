@@ -50,9 +50,71 @@
         "techLeadId": {
           "type": "string",
           "description": "The UID of the user who is the tech lead of this team."
+        },
+        "availableServiceIds": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "List of service IDs that members of this team can request."
         }
       },
       "required": ["name", "techLeadId"]
+    },
+     "Service": {
+      "title": "Service",
+      "description": "Represents a service or access that can be requested.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the service."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the service."
+        }
+      },
+      "required": ["name"]
+    },
+    "AccessRequest": {
+      "title": "Access Request",
+      "description": "Represents a user's request for a service.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user making the request."
+        },
+        "serviceId": {
+          "type": "string",
+          "description": "The ID of the service being requested."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"],
+          "description": "The current status of the request."
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the request was made."
+        },
+        "resolvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The timestamp when the request was resolved."
+        },
+        "resolvedBy": {
+            "type": "string",
+            "description": "The UID of the admin or tech lead who resolved the request."
+        },
+        "notes": {
+            "type": "string",
+            "description": "Notes from the resolver."
+        }
+      },
+      "required": ["userId", "serviceId", "status", "requestedAt"]
     }
   },
   "auth": {
@@ -72,6 +134,18 @@
         "$ref": "#/entities/Team"
       },
       "description": "Stores information about teams."
+    },
+     "/services/{serviceId}": {
+      "schema": {
+        "$ref": "#/entities/Service"
+      },
+      "description": "List of all available services/accesses."
+    },
+    "/requests/{requestId}": {
+      "schema": {
+        "$ref": "#/entities/AccessRequest"
+      },
+      "description": "Collection of all access requests from users."
     }
   }
 }

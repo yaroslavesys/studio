@@ -87,5 +87,37 @@ service cloud.firestore {
       // Only Admins can create, update, or delete teams.
       allow create, update, delete: if isAdmin();
     }
+
+    // SERVICES
+    // Any signed-in user can read the list of available services.
+    // This allows the client to show what can be requested.
+    match /services/{serviceId} {
+      allow read: if isSignedIn();
+      // Only admins can create, update, or delete services.
+      allow write: if isAdmin();
+    }
+
+    // REQUESTS
+    match /requests/{requestId} {
+      // Users can create their own requests.
+      // The request must be for the user themselves.
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      
+      // Users can read their own requests.
+      // Admins can read any request.
+      // TechLeads can read requests from users in their team.
+      function isRequestFromTechLeadTeam() {
+        let requestUserId = get(/databases/$(database)/documents/requests/$(requestId)).data.userId;
+        return isUserInTechLeadTeam(requestUserId);
+      }
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isRequestFromTechLeadTeam());
+      
+      // Admins and relevant TechLeads can update (approve/reject) requests.
+      // Users cannot update their own requests.
+      allow update: if isSignedIn() && (isAdmin() || isRequestFromTechLeadTeam());
+      
+      // Only admins can delete requests.
+      allow delete: if isAdmin();
+    }
   }
 }
