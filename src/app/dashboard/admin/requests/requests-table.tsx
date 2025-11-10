@@ -143,19 +143,22 @@ export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Q
   const handleUpdateStatus = async (request: AccessRequest, newStatus: AccessRequest['status']) => {
     if (!firestore || !currentUser) return;
     const requestDocRef = doc(firestore, 'requests', request.id);
+    
     const updateData: any = {
         status: newStatus,
         resolvedBy: currentUser.uid,
     };
     
     let toastTitle = '';
-    // Only set resolvedAt if it's a final state
-    if (newStatus === 'completed' || newStatus === 'rejected') {
+    
+    if (newStatus === 'completed' || newStatus === 'approved_by_tech_lead') {
         updateData.resolvedAt = serverTimestamp();
-        toastTitle = newStatus === 'completed' ? 'Request Marked as Completed' : 'Request Rejected';
+    }
+    
+    if (newStatus === 'completed') {
+        toastTitle = 'Request Marked as Completed';
     } else if (newStatus === 'approved_by_tech_lead') {
       toastTitle = 'Request Approved by Tech Lead';
-      // For this status, we don't set resolvedAt, as it's not the final step
     }
 
 
