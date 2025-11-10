@@ -9,44 +9,48 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
-import { useAuth } from '@/firebase';
+import { useAuth, useFirebase } from '@/firebase';
 import { GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
-  const auth = useAuth();
+  const { auth, user, isUserLoading } = useFirebase();
   const router = useRouter();
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(true); // Start as true to handle redirect
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!auth) return;
-
-    // This is the crucial part for handling the redirect back from Google.
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result && result.user) {
-          // User has successfully signed in. Redirect to dashboard.
-          router.push('/dashboard');
-        }
-        // If result is null, it means the user just landed on the page
-        // without a redirect. Do nothing and let them click the button.
-      })
-      .catch((error) => {
-        console.error('Error getting redirect result:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Sign-in Failed',
-          description: error.message || 'Could not complete sign-in. Please try again.',
-        });
-      })
-      .finally(() => {
-        setIsSigningIn(false);
-      });
-
-  }, [auth, router, toast]);
+    if (!isUserLoading) {
+      if (user) {
+        // If user is already logged in, redirect to dashboard
+        router.push('/dashboard');
+      } else {
+        // If no user, handle redirect result
+        if (!auth) return;
+        getRedirectResult(auth)
+          .then((result) => {
+            if (result && result.user) {
+              // This is the success case after redirect.
+              // The user object will be picked up by the auth state listener,
+              // triggering the redirect to dashboard.
+            }
+          })
+          .catch((error) => {
+            console.error('Error getting redirect result:', error);
+            toast({
+              variant: 'destructive',
+              title: 'Sign-in Failed',
+              description: error.message || 'Could not complete sign-in. Please try again.',
+            });
+          })
+          .finally(() => {
+            setIsSigningIn(false);
+          });
+      }
+    }
+  }, [auth, user, isUserLoading, router, toast]);
 
   const handleSignIn = async () => {
     if (!auth) {
@@ -75,6 +79,15 @@ export default function LoginPage() {
       setIsSigningIn(false);
     } 
   };
+  
+  // Show a loading state while checking auth status
+  if (isUserLoading || isSigningIn) {
+      return (
+          <div className="flex min-h-screen items-center justify-center">
+            <p>Loading...</p>
+          </div>
+      )
+  }
 
   return (
     <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
@@ -95,9 +108,8 @@ export default function LoginPage() {
             onClick={handleSignIn}
             className="w-full transform transition-transform duration-150 hover:scale-105"
             size="lg"
-            disabled={isSigningIn}
           >
-            {isSigningIn ? 'Проверка...' : 'Sign In with Google'}
+            Sign In with Google
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             Restricted to users within approved domains.

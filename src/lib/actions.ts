@@ -32,40 +32,46 @@ export async function createAccessRequest(
   const db = getDb();
   if (!db) return { error: 'Firestore not initialized' };
   
-  addAccessRequest(
-    db,
-    {
-      title: validatedFields.data.title,
-      description: validatedFields.data.description,
-      requestType: validatedFields.data.requestType as RequestType,
-    },
+  await addDoc(collection(db, 'accessRequests'), {
+    ...validatedFields.data,
     userId,
-    departmentId
-  );
+    departmentId,
+    status: 'Pending',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
 
   revalidatePath('/dashboard');
-  revalidatePath('/dashboard/admin');
 }
 
 export async function updateRequest(id: string, status: RequestStatus, techLeadComment?: string) {
   const db = getDb();
   if (!db) return { error: 'Firestore not initialized' };
-  updateRequestStatus(db, id, status, techLeadComment);
+  
+  const updateData: any = {
+    status,
+    updatedAt: serverTimestamp(),
+  };
+
+  if (techLeadComment) {
+    updateData.techLeadComment = techLeadComment;
+  }
+  
+  await updateDoc(doc(db, 'accessRequests', id), updateData);
   revalidatePath('/dashboard');
-  revalidatePath('/dashboard/admin');
 }
 
 export async function deleteRequest(id: string) {
     const db = getDb();
     if (!db) return { error: 'Firestore not initialized' };
-    deleteRequestById(db, id);
+    await deleteDoc(doc(db, 'accessRequests', id));
     revalidatePath('/dashboard');
-    revalidatePath('/dashboard/admin');
 }
 
 export async function updateUserRole(id: string, role: UserRole) {
     const db = getDb();
     if (!db) return { error: 'Firestore not initialized' };
-    updateUserRoleInDb(db, id, role);
+    await updateDoc(doc(db, 'users', id), { role });
     revalidatePath('/dashboard/admin');
 }

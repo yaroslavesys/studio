@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { FirebaseProvider } from '@/firebase/index';
+import { FirebaseProvider } from '@/firebase/provider';
 
 // This component simply wraps the main FirebaseProvider.
 // Its sole purpose is to ensure that the initialization logic inside FirebaseProvider

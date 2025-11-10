@@ -7,7 +7,7 @@ import {
   useState,
   useEffect,
 } from 'react';
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, FirebaseApp } from 'firebase/app';
 import { Auth, getAuth, User, onAuthStateChanged } from 'firebase/auth';
 import { Firestore, getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
@@ -43,9 +43,6 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
   });
 
   const services = useMemo(() => {
-    if (typeof window === 'undefined') {
-      return { firebaseApp: null, auth: null, firestore: null };
-    }
     // This is the most reliable way: always initialize.
     // getApps()/getApp() has proven unreliable in this environment.
     const app = initializeApp(firebaseConfig);
