@@ -105,35 +105,35 @@ service cloud.firestore {
                       request.resource.data.userId == request.auth.uid &&
                       request.resource.data.status == 'pending';
       
+      // Helper function to check if the request is from a user in the tech lead's team
+      function isRequestFromTechLeadTeam(requestUserId) {
+        return isUserInTechLeadTeam(requestUserId);
+      }
+      
       // Users can read their own requests.
       // Admins can read any request.
       // TechLeads can read requests from users in their team.
-      function isRequestFromTechLeadTeam(requestDoc) {
-        let requestUserId = requestDoc.data.userId;
-        return isUserInTechLeadTeam(requestUserId);
-      }
-      allow get: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isRequestFromTechLeadTeam(resource));
+      allow get: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isRequestFromTechLeadTeam(resource.data.userId));
       
       // Admins and relevant TechLeads can update requests according to the workflow.
-      allow update: if isSignedIn() && 
-        (
-          // Case 1: TechLead approves a pending request for their team member.
-          (isTechLead() && 
-           resource.data.status == 'pending' && 
-           (request.resource.data.status == 'approved_by_tech_lead' || request.resource.data.status == 'rejected') &&
-           isRequestFromTechLeadTeam(resource)
-          ) ||
-          // Case 2: Admin completes a request that was approved by a tech lead.
-          (isAdmin() &&
-           resource.data.status == 'approved_by_tech_lead' &&
-           (request.resource.data.status == 'completed' || request.resource.data.status == 'rejected')
-          ) ||
-          // Case 3: Admin directly approves or rejects a pending request.
-          (isAdmin() &&
-            resource.data.status == 'pending' &&
-            (request.resource.data.status == 'approved_by_tech_lead' || request.resource.data.status == 'rejected')
-          )
-        );
+      allow update: if isSignedIn() && (
+        // TechLead can approve or reject a pending request for their team member.
+        (isTechLead() &&
+         get(/databases/$(database)/documents/requests/$(requestId)).data.status == 'pending' &&
+         (request.resource.data.status == 'approved_by_tech_lead' || request.resource.data.status == 'rejected') &&
+         isRequestFromTechLeadTeam(get(/databases/$(database)/documents/requests/$(requestId)).data.userId)
+        ) ||
+        // Admin can complete a request approved by a tech lead.
+        (isAdmin() &&
+         get(/databases/$(database)/documents/requests/$(requestId)).data.status == 'approved_by_tech_lead' &&
+         (request.resource.data.status == 'completed' || request.resource.data.status == 'rejected')
+        ) ||
+        // Admin can also directly approve or reject a pending request.
+        (isAdmin() &&
+         get(/databases/$(database)/documents/requests/$(requestId)).data.status == 'pending' &&
+         (request.resource.data.status == 'approved_by_tech_lead' || request.resource.data.status == 'rejected')
+        )
+      );
       
       // Only admins can delete requests.
       allow delete: if isAdmin();
