@@ -20,21 +20,25 @@ service cloud.firestore {
     // USERS
     // Users can read their own document.
     // Admins can read any user document.
-    // No one can list all users.
     match /users/{userId} {
       allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
       
       // Users can create their own profile.
-      allow create: if isSignedIn();
+      // The `isAdmin` field can only be set to true if the user's email matches the admin email.
+      // Otherwise, it must be false.
+      allow create: if isSignedIn() && 
+        (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') || request.resource.data.isAdmin == false);
 
       // Users can update their own profile, but they CANNOT make themselves an admin.
       // Admins can update any user profile.
       allow update: if isSignedIn() && 
-        (isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin) || isAdmin();
+        ((isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin) || isAdmin());
       
       // Only admins can delete users.
       allow delete: if isAdmin();
-      allow list: if false;
+
+      // Admins can list all users.
+      allow list: if isAdmin();
     }
   }
 }

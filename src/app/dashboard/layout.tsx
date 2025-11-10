@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useUser } from '@/firebase';
-import { doc, getDoc, getFirestore } from 'firebase/firestore';
+import { usePathname, useRouter } from 'next/navigation';
+import { useFirestore, useUser } from '@/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface UserProfile {
   isAdmin: boolean;
@@ -14,12 +14,14 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isLoading } = useUser();
+  const { user, isUserLoading: isLoading } = useUser();
   const router = useRouter();
+  const pathname = usePathname();
+  const firestore = useFirestore();
   const [isCheckingRole, setIsCheckingRole] = useState(true);
 
   useEffect(() => {
-    if (isLoading) {
+    if (isLoading || !firestore) {
       return;
     }
     if (!user) {
@@ -28,24 +30,41 @@ export default function DashboardLayout({
     }
 
     const checkAdminRole = async () => {
-      const firestore = getFirestore();
       const userDocRef = doc(firestore, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
+      try {
+        const userDoc = await getDoc(userDocRef);
 
-      if (userDoc.exists()) {
-        const userProfile = userDoc.data() as UserProfile;
-        if (userProfile.isAdmin) {
-          // If user is admin and not already on the admin page, redirect
-          if (!router.pathname?.startsWith('/dashboard/admin')) {
-             router.replace('/dashboard/admin');
+        if (userDoc.exists()) {
+          const userProfile = userDoc.data() as UserProfile;
+          if (userProfile.isAdmin) {
+            // If user is admin and not on an admin page, redirect to admin dashboard
+            if (!pathname.startsWith('/dashboard/admin')) {
+              router.replace('/dashboard/admin');
+            }
+          } else {
+            // If user is not admin and trying to access admin page, redirect to user dashboard
+            if (pathname.startsWith('/dashboard/admin')) {
+              router.replace('/dashboard');
+            }
           }
+        } else {
+            // If profile doesn't exist, and they are trying to access admin, redirect.
+             if (pathname.startsWith('/dashboard/admin')) {
+              router.replace('/dashboard');
+            }
         }
+      } catch (error) {
+        console.error("Error checking admin role:", error);
+         if (pathname.startsWith('/dashboard/admin')) {
+            router.replace('/dashboard');
+          }
+      } finally {
+        setIsCheckingRole(false);
       }
-      setIsCheckingRole(false);
     };
 
     checkAdminRole();
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router, firestore, pathname]);
 
   if (isLoading || isCheckingRole) {
     return (
