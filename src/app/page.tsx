@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,10 +40,11 @@ export default function HomePage() {
     }
     const provider = new GoogleAuthProvider();
     try {
-      // signInWithRedirect will navigate away, the useEffect hook will handle the return.
-      await signInWithRedirect(auth, provider);
+      // Use signInWithPopup instead of signInWithRedirect
+      await signInWithPopup(auth, provider);
+      // The useEffect hook will handle the redirect after successful login.
     } catch (error) {
-      console.error('Error starting sign-in redirect: ', error);
+      console.error('Error during sign-in: ', error);
       toast({
         variant: 'destructive',
         title: 'Uh oh! Something went wrong.',
