@@ -1,47 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-    
-    function isAdmin() {
-      // Check the user's custom claim or a role in their user document
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
-    }
-
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      // Allow a user to create their own user document
-      allow create: if isOwner(userId);
-      // Allow a user to update their own document, or an admin to update any
-      allow update: if isOwner(userId) || isAdmin();
-      // Only admins can delete user documents
-      allow delete: if isAdmin();
-    }
-
-    match /departments/{departmentId} {
-      allow read: if isSignedIn();
-      // Only admins can create/update/delete departments
-      allow write: if isAdmin();
-    }
-
-    match /accessRequests/{requestId} {
-      allow read: if isSignedIn();
-      // Users can create requests for themselves
-      allow create: if isOwner(request.resource.data.userId);
-      // Users can update/delete their own requests, or an admin can
-      allow update, delete: if isOwner(resource.data.userId) || isAdmin();
-    }
-
-    match /meta/{docId} {
-      allow read: if true;
-      allow write: if false; // Seeding should be a trusted server process
+    // By default, deny all reads and writes
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

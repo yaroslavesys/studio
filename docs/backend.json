@@ -1,75 +1,7 @@
 {
-  "entities": {
-    "User": {
-      "title": "User",
-      "type": "object",
-      "description": "Represents a user in the application.",
-      "properties": {
-        "id": { "type": "string", "description": "Unique identifier (matches Firebase Auth UID)." },
-        "name": { "type": "string", "description": "User's full name." },
-        "email": { "type": "string", "format": "email", "description": "User's email address." },
-        "avatarId": { "type": "string", "description": "ID for the placeholder avatar image." },
-        "role": { "type": "string", "enum": ["Admin", "TechLead", "User"], "description": "User's role." },
-        "departmentId": { "type": "string", "description": "ID of the department the user belongs to." }
-      },
-      "required": ["id", "name", "email", "role", "departmentId", "avatarId"]
-    },
-    "Department": {
-      "title": "Department",
-      "type": "object",
-      "description": "Represents a department within the organization.",
-      "properties": {
-        "id": { "type": "string", "description": "Unique identifier for the department." },
-        "name": { "type": "string", "description": "The name of the department." }
-      },
-      "required": ["id", "name"]
-    },
-    "AccessRequest": {
-      "title": "AccessRequest",
-      "type": "object",
-      "description": "Represents an access request submitted by a user.",
-      "properties": {
-        "id": { "type": "string", "description": "Unique identifier for the access request." },
-        "title": { "type": "string", "description": "A brief title for the request." },
-        "description": { "type": "string", "description": "Detailed justification for the request." },
-        "requestType": { "type": "string", "enum": ["System", "Data", "Other"], "description": "The category of the access request." },
-        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"], "description": "The current status of the request." },
-        "userId": { "type": "string", "description": "The ID of the user who made the request." },
-        "departmentId": { "type": "string", "description": "The department ID associated with the request." },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the request was created." },
-        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when the request was last updated." },
-        "techLeadComment": { "type": "string", "description": "Optional comment from the Tech Lead during review." }
-      },
-      "required": ["id", "title", "description", "requestType", "status", "userId", "departmentId", "createdAt", "updatedAt"]
-    },
-    "Meta": {
-        "title": "Meta",
-        "type": "object",
-        "description": "Internal metadata for application state.",
-        "properties": {
-            "isSeeded": { "type": "boolean", "description": "Flag to check if the database has been seeded." }
-        }
-    }
-  },
+  "entities": {},
   "auth": {
-    "providers": ["google.com"]
+    "providers": []
   },
-  "firestore": {
-    "/users/{userId}": {
-      "schema": { "$ref": "#/entities/User" },
-      "description": "Stores individual user profiles. Document ID is the Firebase Auth UID."
-    },
-    "/departments/{departmentId}": {
-      "schema": { "$ref": "#/entities/Department" },
-      "description": "Stores organizational departments."
-    },
-    "/accessRequests/{requestId}": {
-      "schema": { "$ref": "#/entities/AccessRequest" },
-      "description": "Stores all access requests from users."
-    },
-    "/meta/{metaId}": {
-        "schema": { "$ref": "#/entities/Meta"},
-        "description": "Stores metadata for the application, like seeding status."
-    }
-  }
+  "firestore": {}
 }
