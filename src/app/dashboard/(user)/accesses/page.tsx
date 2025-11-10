@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { collection, doc, getDoc, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HelpCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -98,37 +98,33 @@ export default function AccessesPage() {
         return;
     }
 
-    try {
-        const requestsCollection = collection(firestore, 'requests');
-        const newRequest = {
-            userId: user.uid,
-            serviceId: service.id,
-            status: 'pending' as const,
-            requestedAt: serverTimestamp(),
-        };
-        await addDoc(requestsCollection, newRequest)
-         .catch((e) => {
+    const requestsCollection = collection(firestore, 'requests');
+    const newRequest = {
+        userId: user.uid,
+        serviceId: service.id,
+        status: 'pending' as const,
+        requestedAt: serverTimestamp(),
+    };
+    addDoc(requestsCollection, newRequest)
+        .then(() => {
+             toast({
+                title: "Request Submitted",
+                description: `Your request for ${service.name} has been submitted.`,
+            });
+        })
+        .catch((e) => {
             const permissionError = new FirestorePermissionError({
-              path: requestsCollection.path,
-              operation: 'create',
-              requestResourceData: newRequest,
+                path: requestsCollection.path,
+                operation: 'create',
+                requestResourceData: newRequest,
             });
             errorEmitter.emit('permission-error', permissionError);
-            throw permissionError;
+            toast({
+                variant: "destructive",
+                title: "Request Failed",
+                description: e.message || "Could not submit your access request.",
+            });
         });
-
-        toast({
-            title: "Request Submitted",
-            description: `Your request for ${service.name} has been submitted.`,
-        });
-    } catch (e: any) {
-        console.error("Error submitting request:", e);
-        toast({
-            variant: "destructive",
-            title: "Request Failed",
-            description: e.message || "Could not submit your access request.",
-        });
-    }
 };
 
   const isLoading = isLoadingTeam || isLoadingServices;
@@ -144,7 +140,10 @@ export default function AccessesPage() {
             </CardHeader>
             <CardContent className="space-y-4">
                 {isLoading ? (
-                    <Skeleton className="h-24 w-full" />
+                    <div className="space-y-4">
+                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-24 w-full" />
+                    </div>
                 ) : availableServices && availableServices.length > 0 ? (
                     availableServices.map(service => (
                         <Card key={service.id} className="flex items-center justify-between p-4">

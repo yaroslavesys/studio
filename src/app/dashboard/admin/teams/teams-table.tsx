@@ -2,10 +2,8 @@
 import { useMemo, useState } from 'react';
 import {
   collection,
-  addDoc,
   doc,
   updateDoc,
-  deleteDoc,
   writeBatch,
 } from 'firebase/firestore';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
@@ -44,7 +42,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -52,6 +49,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -68,6 +66,11 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { Service } from '@/lib/types';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
+import { deleteDoc, addDoc } from 'firebase/firestore';
+
 
 // --- Types ---
 interface UserProfile {
@@ -81,6 +84,7 @@ interface Team {
   id: string;
   name: string;
   techLeadId: string;
+  availableServiceIds?: string[];
 }
 
 // --- Form Schema ---
@@ -89,6 +93,7 @@ const teamFormSchema = z.object({
     message: 'Team name must be at least 2 characters.',
   }),
   techLeadId: z.string().min(1, { message: 'You must select a tech lead.' }),
+  availableServiceIds: z.array(z.string()).default([]),
 });
 
 // --- Edit/Create Team Form ---
@@ -96,11 +101,13 @@ function TeamForm({
   team,
   users,
   teams,
+  services,
   onFinished,
 }: {
   team?: Team;
   users: UserProfile[];
   teams: Team[];
+  services: Service[];
   onFinished: () => void;
 }) {
   const firestore = useFirestore();
@@ -112,6 +119,7 @@ function TeamForm({
     defaultValues: {
       name: team?.name || '',
       techLeadId: team?.techLeadId || '',
+      availableServiceIds: team?.availableServiceIds || [],
     },
   });
 
@@ -122,18 +130,14 @@ function TeamForm({
     const previousTechLeadId = team?.techLeadId;
 
     try {
-      // Logic to update roles
       if (isEditing) {
         const teamDocRef = doc(firestore, 'teams', team.id);
         batch.update(teamDocRef, values);
 
-        // If tech lead has changed, update user roles
         if (newTechLeadId !== previousTechLeadId) {
-          // Set new tech lead's role
           const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
           batch.update(newTechLeadRef, { isTechLead: true });
 
-          // Demote previous tech lead if they are not leading any other team
           if (previousTechLeadId) {
             const otherTeamsLed = teams.filter(
               (t) =>
@@ -157,13 +161,12 @@ function TeamForm({
 
         toast({ title: 'Team Updated', description: `The ${values.name} team has been updated.` });
 
-      } else { // Creating a new team
+      } else {
         const teamsCollectionRef = collection(firestore, 'teams');
-        const newTeamRef = doc(teamsCollectionRef); // Create a ref with a new ID
+        const newTeamRef = doc(teamsCollectionRef);
         
         batch.set(newTeamRef, values);
 
-        // Set the new tech lead's role
         const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
         batch.update(newTechLeadRef, { isTechLead: true });
         
@@ -190,7 +193,6 @@ function TeamForm({
     }
   };
 
-  // Tech leads of other teams cannot be selected
   const otherTeamsTechLeadIds = teams
     .filter((t) => t.id !== team?.id)
     .map((t) => t.techLeadId);
@@ -201,40 +203,93 @@ function TeamForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Team Name</FormLabel>
-              <FormControl>
-                <Input placeholder="E.g. Frontend Warriors" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="techLeadId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tech Lead</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="space-y-4">
+            <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Team Name</FormLabel>
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a user to lead the team" />
-                  </SelectTrigger>
+                    <Input placeholder="E.g. Frontend Warriors" {...field} />
                 </FormControl>
-                <SelectContent>
-                  {availableTechLeads.map((user) => (
-                    <SelectItem key={user.uid} value={user.uid}>
-                      {user.displayName} ({user.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+            <FormField
+            control={form.control}
+            name="techLeadId"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Tech Lead</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select a user to lead the team" />
+                    </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                    {availableTechLeads.map((user) => (
+                        <SelectItem key={user.uid} value={user.uid}>
+                        {user.displayName} ({user.email})
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        </div>
+        <Separator />
+         <FormField
+          control={form.control}
+          name="availableServiceIds"
+          render={() => (
+            <FormItem>
+              <div className="mb-4">
+                <FormLabel className="text-base">Available Services</FormLabel>
+                <FormDescription>
+                  Select the services that members of this team can request.
+                </FormDescription>
+              </div>
+              <div className="space-y-2">
+              {services.map((service) => (
+                <FormField
+                  key={service.id}
+                  control={form.control}
+                  name="availableServiceIds"
+                  render={({ field }) => {
+                    return (
+                      <FormItem
+                        key={service.id}
+                        className="flex flex-row items-start space-x-3 space-y-0"
+                      >
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value?.includes(service.id)}
+                            onCheckedChange={(checked) => {
+                              return checked
+                                ? field.onChange([...(field.value || []), service.id])
+                                : field.onChange(
+                                    field.value?.filter(
+                                      (value) => value !== service.id
+                                    )
+                                  )
+                            }}
+                          />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                          {service.name}
+                        </FormLabel>
+                      </FormItem>
+                    )
+                  }}
+                />
+              ))}
+              </div>
               <FormMessage />
             </FormItem>
           )}
@@ -267,9 +322,16 @@ export function TeamsTable() {
     if (!firestore) return null;
     return collection(firestore, 'users');
   }, [firestore]);
+  
+  const servicesCollection = useMemoFirebase(() => {
+    if(!firestore) return null;
+    return collection(firestore, 'services');
+  }, [firestore]);
+
 
   const { data: teams, isLoading: isLoadingTeams, error: teamsError } = useCollection<Team>(teamsCollection);
   const { data: usersData, isLoading: isLoadingUsers, error: usersError } = useCollection<UserProfile>(usersCollection);
+  const { data: services, isLoading: isLoadingServices, error: servicesError } = useCollection<Service>(servicesCollection);
 
   const usersMap = useMemo(() => {
     if (!usersData) return new Map<string, string>();
@@ -320,8 +382,8 @@ export function TeamsTable() {
     }
   };
 
-  const isLoading = isLoadingTeams || isLoadingUsers;
-  const error = teamsError || usersError;
+  const isLoading = isLoadingTeams || isLoadingUsers || isLoadingServices;
+  const error = teamsError || usersError || servicesError;
 
   if (isLoading) {
     return (
@@ -361,6 +423,7 @@ export function TeamsTable() {
             <TableRow>
               <TableHead>Team Name</TableHead>
               <TableHead>Tech Lead</TableHead>
+              <TableHead>Available Services</TableHead>
               <TableHead className="w-[50px] text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -370,6 +433,7 @@ export function TeamsTable() {
                 <TableRow key={team.id}>
                   <TableCell className="font-medium">{team.name}</TableCell>
                   <TableCell>{usersMap.get(team.techLeadId) ?? 'N/A'}</TableCell>
+                  <TableCell>{team.availableServiceIds?.length || 0}</TableCell>
                   <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -397,7 +461,7 @@ export function TeamsTable() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={3} className="text-center">
+                <TableCell colSpan={4} className="text-center">
                   No teams found.
                 </TableCell>
               </TableRow>
@@ -407,18 +471,19 @@ export function TeamsTable() {
       </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{selectedTeam ? 'Edit Team' : 'Create New Team'}</DialogTitle>
             <DialogDescription>
               {selectedTeam ? 'Update the details for this team.' : 'Fill out the form to create a new team.'}
             </DialogDescription>
           </DialogHeader>
-          {usersData && teams &&(
+          {usersData && teams && services && (
             <TeamForm
               team={selectedTeam}
               users={usersData}
               teams={teams}
+              services={services}
               onFinished={() => setIsFormOpen(false)}
             />
           )}
