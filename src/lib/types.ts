@@ -6,3 +6,9 @@
 //   name: string;
 //   email: string;
 // }
+
+export interface Service {
+    id: string;
+    name: string;
+    description: string;
+}
