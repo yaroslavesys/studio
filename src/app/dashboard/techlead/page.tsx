@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import {
   collection,
   query,
   where,
   getDocs,
   DocumentData,
+  CollectionReference,
 } from 'firebase/firestore';
 import {
   Card,
@@ -18,9 +19,10 @@ import {
 } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 interface Team {
   id: string;
@@ -50,11 +52,19 @@ export default function TechLeadDashboardPage() {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
+      
       try {
         // 1. Find the team for the current tech lead
         const teamsRef = collection(firestore, 'teams');
         const teamQuery = query(teamsRef, where('techLeadId', '==', user.uid));
-        const teamSnapshot = await getDocs(teamQuery);
+        const teamSnapshot = await getDocs(teamQuery).catch((e) => {
+            const permissionError = new FirestorePermissionError({
+              path: (teamsRef as CollectionReference).path,
+              operation: 'list',
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            throw permissionError;
+        });
 
         if (teamSnapshot.empty) {
           setError('You are not assigned to any team as a tech lead.');
@@ -74,14 +84,21 @@ export default function TechLeadDashboardPage() {
           usersRef,
           where('teamId', '==', foundTeam.id)
         );
-        const membersSnapshot = await getDocs(membersQuery);
+        const membersSnapshot = await getDocs(membersQuery).catch((e) => {
+            const permissionError = new FirestorePermissionError({
+              path: (usersRef as CollectionReference).path,
+              operation: 'list',
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            throw permissionError;
+        });
 
         const members = membersSnapshot.docs.map(
           (doc) => ({ ...doc.data(), uid: doc.id } as TeamMember)
         );
         setTeamMembers(members);
       } catch (e: any) {
-        console.error(e);
+        console.error(e); // This will now log the detailed FirestorePermissionError
         setError(e.message || 'An error occurred while fetching data.');
       } finally {
         setIsLoading(false);
