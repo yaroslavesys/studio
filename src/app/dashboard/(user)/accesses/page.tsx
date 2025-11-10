@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 interface UserProfile {
     uid: string;
     teamId?: string;
+    isAdmin?: boolean;
 }
 
 interface Team {
@@ -46,33 +47,43 @@ export default function AccessesPage() {
   const { toast } = useToast();
   
   const [team, setTeam] = useState<Team | null>(null);
-  const [isLoadingTeam, setIsLoadingTeam] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   useEffect(() => {
     if (!user || !firestore) return;
-    const fetchTeam = async () => {
-        setIsLoadingTeam(true);
+    const fetchUserData = async () => {
+        setIsLoadingProfile(true);
         const userDocRef = doc(firestore, 'users', user.uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
-            const profile = userDoc.data() as UserProfile;
-            if(profile.teamId) {
-                const teamDocRef = doc(firestore, 'teams', profile.teamId);
+            const userProfile = { uid: user.uid, ...userDoc.data() } as UserProfile;
+            setProfile(userProfile);
+            if(userProfile.teamId && !userProfile.isAdmin) {
+                const teamDocRef = doc(firestore, 'teams', userProfile.teamId);
                 const teamDoc = await getDoc(teamDocRef);
                 if (teamDoc.exists()) {
                     setTeam({ id: teamDoc.id, ...teamDoc.data() } as Team);
                 }
             }
         }
-        setIsLoadingTeam(false);
+        setIsLoadingProfile(false);
     }
-    fetchTeam();
+    fetchUserData();
   }, [user, firestore]);
 
   const availableServicesQuery = useMemoFirebase(() => {
-    if (!firestore || !team?.availableServiceIds || team.availableServiceIds.length === 0) return null;
+    if (!firestore) return null;
+    
+    // Admins can see all services
+    if (profile?.isAdmin) {
+        return collection(firestore, 'services');
+    }
+
+    // Regular users see services based on their team
+    if (!team?.availableServiceIds || team.availableServiceIds.length === 0) return null;
     return query(collection(firestore, 'services'), where('__name__', 'in', team.availableServiceIds));
-  }, [firestore, team]);
+  }, [firestore, profile, team]);
 
   const userRequestsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -127,7 +138,8 @@ export default function AccessesPage() {
         });
 };
 
-  const isLoading = isLoadingTeam || isLoadingServices;
+  const isLoading = isLoadingProfile || isLoadingServices;
+  const isRegularUserWithNoServices = !profile?.isAdmin && (!team || !team.availableServiceIds || team.availableServiceIds.length === 0);
 
   return (
      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -135,7 +147,9 @@ export default function AccessesPage() {
             <CardHeader>
                 <CardTitle>Request Access</CardTitle>
                 <CardDescription>
-                    Here are the services and tools available for your team to request.
+                    {profile?.isAdmin 
+                        ? "As an admin, you can see all available services in the system."
+                        : "Here are the services and tools available for your team to request."}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -158,7 +172,11 @@ export default function AccessesPage() {
                     <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-8 text-center">
                         <HelpCircle className="mx-auto h-12 w-12 text-muted-foreground" />
                         <h3 className="mt-4 text-lg font-semibold">No Services Available</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">There are no services configured for your team to request.</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            {profile?.isAdmin 
+                                ? "There are no services configured in the system yet."
+                                : "There are no services configured for your team to request."}
+                        </p>
                     </div>
                 )}
             </CardContent>
