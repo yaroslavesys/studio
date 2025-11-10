@@ -20,13 +20,12 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Check, X, MoreHorizontal, CheckCheck } from 'lucide-react';
+import { Check, X, MoreHorizontal } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import {
   Dialog,
@@ -51,10 +50,9 @@ interface AccessRequest {
   id: string;
   userId: string;
   serviceId: string;
-  status: 'pending' | 'approved_by_tech_lead' | 'completed' | 'rejected';
+  status: 'pending';
   requestedAt: any;
   notes?: string;
-  resolvedAt?: any;
 }
 
 interface UserProfile {
@@ -62,7 +60,7 @@ interface UserProfile {
   displayName: string;
   photoURL?: string;
   email: string;
-  isAdmin?: boolean;
+  isTechLead?: boolean;
 }
 
 interface Service {
@@ -121,7 +119,7 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
 };
 
 
-export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Query | null, userProfile?: UserProfile | null }) {
+export function TechleadRequestsTable({ requestsQuery, userProfile }: { requestsQuery: Query | null, userProfile?: UserProfile | null }) {
   const firestore = useFirestore();
   const { user: currentUser } = useUser();
   const { toast } = useToast();
@@ -139,23 +137,15 @@ export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Q
   const servicesMap = useMemo(() => services ? new Map(services.map(s => [s.id, s.name])) : new Map(), [services]);
   const usersMap = useMemo(() => users ? new Map(users.map(u => [u.uid, u])) : new Map(), [users]);
 
-  const handleUpdateStatus = async (request: AccessRequest, newStatus: AccessRequest['status']) => {
+  const handleApprove = async (request: AccessRequest) => {
     if (!firestore || !currentUser) return;
     const requestDocRef = doc(firestore, 'requests', request.id);
     
-    const updateData: any = {
-        status: newStatus,
+    const updateData = {
+        status: 'approved_by_tech_lead' as const,
         resolvedBy: currentUser.uid,
-        resolvedAt: serverTimestamp(), // Always set resolution time on action
+        resolvedAt: serverTimestamp(),
     };
-    
-    let toastTitle = '';
-    
-    if (newStatus === 'completed') {
-        toastTitle = 'Request Marked as Completed';
-    } else if (newStatus === 'approved_by_tech_lead') {
-      toastTitle = 'Request Approved';
-    }
 
     try {
         await updateDoc(requestDocRef, updateData)
@@ -168,24 +158,9 @@ export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Q
             errorEmitter.emit('permission-error', permissionError);
             throw permissionError;
         });
-        toast({ title: toastTitle });
+        toast({ title: "Request Approved", description: "The request has been sent to an admin for final processing." });
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Action Failed', description: error.message });
-    }
-  };
-
-  const getStatusBadge = (status: AccessRequest['status']) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="secondary">Pending Tech Lead</Badge>;
-      case 'approved_by_tech_lead':
-        return <Badge variant="outline" className="border-yellow-500 text-yellow-500">Pending Admin</Badge>;
-      case 'completed':
-        return <Badge variant="default">Completed</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive">Rejected</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
@@ -223,10 +198,6 @@ export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Q
             {requests && requests.length > 0 ? (
               requests.map((request) => {
                 const requestingUser = usersMap.get(request.userId);
-                
-                const canComplete = userProfile?.isAdmin && request.status === 'approved_by_tech_lead';
-                const canFastTrackApprove = userProfile?.isAdmin && request.status === 'pending';
-                const canBeRejected = userProfile?.isAdmin && (request.status === 'pending' || request.status === 'approved_by_tech_lead');
 
                 return (
                   <TableRow key={request.id}>
@@ -245,10 +216,9 @@ export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Q
                     <TableCell>{servicesMap.get(request.serviceId) || 'Unknown Service'}</TableCell>
                     <TableCell><SafeDate date={request.requestedAt?.toDate()} /></TableCell>
                     <TableCell>
-                      {getStatusBadge(request.status)}
+                      <Badge variant="secondary">Pending</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                       {(canComplete || canFastTrackApprove || canBeRejected) ? (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon">
@@ -256,30 +226,16 @@ export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Q
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                {canFastTrackApprove && (
-                                    <DropdownMenuItem onClick={() => handleUpdateStatus(request, 'approved_by_tech_lead')}>
-                                        <Check className="mr-2 h-4 w-4" />
-                                        Approve for Admin
-                                    </DropdownMenuItem>
-                                )}
-                                {canComplete && (
-                                     <DropdownMenuItem onClick={() => handleUpdateStatus(request, 'completed')}>
-                                        <CheckCheck className="mr-2 h-4 w-4" />
-                                        Mark as Completed
-                                    </DropdownMenuItem>
-                                )}
-                                { (canComplete || canFastTrackApprove) && canBeRejected && <DropdownMenuSeparator />}
-                                {canBeRejected && (
-                                    <DropdownMenuItem className="text-destructive" onClick={() => setRequestToReject(request)}>
-                                        <X className="mr-2 h-4 w-4" />
-                                        Reject
-                                    </DropdownMenuItem>
-                                )}
+                                <DropdownMenuItem onClick={() => handleApprove(request)}>
+                                    <Check className="mr-2 h-4 w-4" />
+                                    Approve
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive" onClick={() => setRequestToReject(request)}>
+                                    <X className="mr-2 h-4 w-4" />
+                                    Reject
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">No actions</span>
-                      )}
                     </TableCell>
                   </TableRow>
                 )
@@ -287,7 +243,7 @@ export function RequestsTable({ requestsQuery, userProfile }: { requestsQuery: Q
             ) : (
               <TableRow>
                 <TableCell colSpan={5} className="h-24 text-center">
-                  No requests found.
+                  No pending requests for your team.
                 </TableCell>
               </TableRow>
             )}

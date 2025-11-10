@@ -28,14 +28,14 @@ export default function AdminRequestsPage() {
 
   const { data: userProfile } = useDoc<UserProfile>(userProfileRef);
 
-  const allRequestsQuery = useMemoFirebase(() => {
+  // Admins see requests that are either pending their final approval or can be fast-tracked
+  const adminRequestsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    // Admins primarily act on requests approved by tech leads, but can also see pending ones.
     return query(
       collection(firestore, 'requests'), 
       where('status', 'in', ['approved_by_tech_lead', 'pending']),
-      orderBy('status'),
-      orderBy('requestedAt', 'desc')
+      orderBy('status', 'desc'), // Show 'pending' before 'approved_by_tech_lead'
+      orderBy('requestedAt', 'asc')
     );
   }, [firestore]);
 
@@ -49,7 +49,7 @@ export default function AdminRequestsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <RequestsTable requestsQuery={allRequestsQuery} userProfile={userProfile}/>
+          <RequestsTable requestsQuery={adminRequestsQuery} userProfile={userProfile}/>
         </CardContent>
       </Card>
     </div>
