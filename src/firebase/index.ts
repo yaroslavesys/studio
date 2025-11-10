@@ -7,18 +7,22 @@ import { Firestore, getFirestore } from 'firebase/firestore';
 import { useMemo } from 'react';
 import type { DependencyList } from 'react';
 
+// This is the only reliable way to initialize Firebase in this environment.
+// It ensures that we either create a new app instance or get the existing one,
+// always using the correct config.
 export function initializeFirebase(): {
   firebaseApp: FirebaseApp;
   auth: Auth;
   firestore: Firestore;
 } {
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   return {
     firebaseApp: app,
     auth: getAuth(app),
     firestore: getFirestore(app),
   };
 }
+
 
 // Hook to memoize Firebase queries or other objects.
 // Throws an error if the object is not memoized, preventing infinite loops.

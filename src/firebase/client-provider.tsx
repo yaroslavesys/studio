@@ -9,7 +9,9 @@ interface FirebaseClientProviderProps {
 }
 
 export function FirebaseClientProvider({ children }: FirebaseClientProviderProps) {
+  // useMemo ensures that Firebase is initialized only once per client session.
   const firebaseServices = useMemo(() => {
+    // We only want to initialize firebase on the client
     if (typeof window === 'undefined') {
       return { firebaseApp: null, auth: null, firestore: null };
     }
