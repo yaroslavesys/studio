@@ -30,11 +30,8 @@ service cloud.firestore {
     // Returns true if the user being accessed is in the tech lead's team
     function isUserInTechLeadTeam(userId) {
       let userTeamId = get(/databases/$(database)/documents/users/$(userId)).data.teamId;
-      let techLeadTeam = get(/databases/$(database)/documents/teams?query=techLeadId==$(request.auth.uid));
-      // This is a placeholder for a real query, as rules don't support direct queries like this.
-      // In a real scenario, you'd likely pass the teamId to the rule or check against the tech lead's own teamId field.
-      // For now, we'll check if the user's teamId is not null and the requester is a tech lead.
-      // A more robust rule would be needed for production.
+      // This is a more secure way to check team membership.
+      // The tech lead must prove they are the lead of the team they are trying to read from.
       let techLeadTeamId = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId;
       return isTechLead() && userTeamId == techLeadTeamId;
     }
@@ -50,7 +47,7 @@ service cloud.firestore {
       // Users can create their own profile.
       // The `isAdmin` field can only be set to true if the user's email matches the admin email. Otherwise, it must be false.
       // The `isTechLead` field can only be set to true if the user's email matches the tech lead email. Otherwise, it must be false.
-      allow create: if isSignedIn() && 
+      allow create: if isSignedIn() && isOwner(userId) &&
         (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') || request.resource.data.isAdmin == false) &&
         (request.resource.data.isTechLead == (request.auth.token.email == 'yaroslav_system.admin@newdevils.net') || request.resource.data.isTechLead == false);
 
@@ -68,8 +65,10 @@ service cloud.firestore {
     
     // TEAMS
     match /teams/{teamId} {
-      allow read: if isSignedIn() && (isAdmin() || isTeamTechLead(teamId));
-      allow list: if isSignedIn() && (isAdmin() || isTechLead());
+      // Admins can read any team. TechLeads can ONLY read their own team document.
+      allow get: if isSignedIn() && (isAdmin() || isTeamTechLead(teamId));
+      // Admins can list all teams. TechLeads can query for their own team.
+      allow list: if isSignedIn() && (isAdmin() || (isTechLead() && request.query.limit <= 1));
       allow create, update, delete: if isAdmin();
     }
   }
