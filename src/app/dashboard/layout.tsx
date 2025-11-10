@@ -75,6 +75,14 @@ export default function DashboardLayout({
       </div>
     );
   }
+  
+  if (!user) {
+     return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Redirecting to login...</p>
+      </div>
+    );
+  }
 
   return <>{children}</>;
 }
