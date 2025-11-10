@@ -49,7 +49,7 @@ export default function AdminDashboardLayout({
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Link href="/dashboard/admin" passHref legacyBehavior>
+              <Link href="/dashboard/admin">
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === '/dashboard/admin'}
@@ -62,7 +62,7 @@ export default function AdminDashboardLayout({
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/dashboard/admin/teams" passHref legacyBehavior>
+              <Link href="/dashboard/admin/teams">
                 <SidebarMenuButton
                   asChild
                   isActive={pathname.startsWith('/dashboard/admin/teams')}

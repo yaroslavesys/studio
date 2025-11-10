@@ -49,7 +49,7 @@ export default function TechLeadDashboardLayout({
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Link href="/dashboard/techlead" passHref legacyBehavior>
+              <Link href="/dashboard/techlead">
                 <SidebarMenuButton asChild isActive={pathname === '/dashboard/techlead'}>
                   <a>
                     <Briefcase />
