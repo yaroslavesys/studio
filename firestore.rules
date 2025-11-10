@@ -1,136 +1,25 @@
-/**
- * @fileoverview Firestore Security Rules for AccessFlow application.
- *
- * Core Philosophy:
- * This ruleset enforces a strict user-ownership model for user profiles and their access requests,
- * combined with role-based access control for roles and departments.
- * User documents can only be created by themselves. Access Requests are nested under users and
- * follow the same ownership pattern.
- *
- * Data Structure:
- * - /users/{userId}: Stores user profiles.
- * - /roles/{roleId}: Stores role definitions.
- * - /departments/{departmentId}: Stores department definitions.
- * - /users/{userId}/accessRequests/{accessRequestId}: Stores access requests for each user.
- *
- * Key Security Decisions:
- * - Users can only create, read, update, and delete their own user documents.
- * - Access requests are owned by the user who created them and can only be managed by them.
- * - Listing of all users, roles, and departments is disallowed to prevent information disclosure.
- * - Role and Department documents are globally readable. Write operations are denied.
- *
- * Denormalization for Authorization:
- * The `User` document denormalizes `roleId` and `departmentId` to simplify authorization checks
- * and avoid costly `get()` calls.
- * This allows rules to directly check `resource.data.roleId` against allowed roles.
- *
- * Structural Segregation:
- * Roles and departments are stored in separate top-level collections, allowing for
- * efficient management and querying of these entities.
- */
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * @description Checks if the current user is signed in.
-     * @returns {boolean} True if the user is signed in, false otherwise.
-     * @example isSignedIn() == true if request.auth != null
-     */
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /**
-     * @description Checks if the provided userId matches the authenticated user's ID.
-     * @param {string} userId - The user ID to compare against the authenticated user's ID.
-     * @returns {boolean} True if the userId matches the authenticated user's ID, false otherwise.
-     * @example isOwner('user123') == true if request.auth.uid == 'user123'
-     */
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return request.auth.uid == userId;
     }
 
-    /**
-     * @description Checks if the provided userId matches the authenticated user's ID and that the document exists.
-     * @param {string} userId - The user ID to compare against the authenticated user's ID.
-     * @returns {boolean} True if the userId matches the authenticated user's ID and that the document exists, false otherwise.
-     * @example isExistingOwner('user123') == true if request.auth.uid == 'user123' && resource != null
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-    
-    /**
-     * @description Rules for user documents.
-     * @path /users/{userId}
-     * @allow (create) - Authenticated user can create their own user document if the userId matches their auth UID.
-     * @allow (get, update, delete) - Authenticated user can get, update, and delete their own user document if the userId matches their auth UID.
-     * @deny (list) - Listing all users is not allowed.
-     * @deny (create) - An unauthenticated user cannot create a user document.
-     * @deny (update) - A different user cannot update another user's document.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data.
-     */
+    // USERS
+    // Users can create their own document upon signing up.
+    // They can read, update, and delete their own document.
+    // No one can list all users.
     match /users/{userId} {
-      // Only allow creating a user document if the authenticated user's ID matches the document ID.
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      // Only allow reading, updating, and deleting a user document if the authenticated user's ID matches the document ID and the document exists.
-      allow get, update, delete: if isExistingOwner(userId);
-
-      // Prevent listing all users.
+      allow read, update, delete: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn();
       allow list: if false;
-    }
-
-    /**
-     * @description Rules for role documents.
-     * @path /roles/{roleId}
-     * @allow (get) - Any user can read role documents.
-     * @deny (create, update, delete, list) - No one can create, update, delete, or list role documents.
-     * @principle Roles are globally readable but only manageable by admins (not implemented in this prototype).
-     */
-    match /roles/{roleId} {
-      // Allow anyone to read role documents.
-      allow get: if true;
-      // Prevent creating, updating, and deleting role documents.
-      allow create, update, delete: if false;
-      // Prevent listing all roles.
-      allow list: if false;
-    }
-
-    /**
-     * @description Rules for department documents.
-     * @path /departments/{departmentId}
-     * @allow (get) - Any user can read department documents.
-     * @deny (create, update, delete, list) - No one can create, update, delete, or list department documents.
-     * @principle Departments are globally readable but only manageable by admins (not implemented in this prototype).
-     */
-    match /departments/{departmentId} {
-      // Allow anyone to read department documents.
-      allow get: if true;
-      // Prevent creating, updating, and deleting department documents.
-      allow create, update, delete: if false;
-      // Prevent listing all departments.
-      allow list: if false;
-    }
-
-    /**
-     * @description Rules for access request documents.
-     * @path /users/{userId}/accessRequests/{accessRequestId}
-     * @allow (create) - Authenticated user can create access requests under their own user document.
-     * @allow (get, update, delete) - Authenticated user can get, update, and delete their own access requests.
-     * @deny (list) - Listing of all access requests is only allowed for the owner.
-     * @deny (create) - An unauthenticated user cannot create access requests.
-     * @deny (update) - A different user cannot update another user's access request.
-     * @principle Enforces document ownership for access requests and restricts access to the owner.
-     */
-    match /users/{userId}/accessRequests/{accessRequestId} {
-      // Only allow creating an access request if the authenticated user's ID matches the user ID in the path.
-      allow create: if isOwner(userId) && request.resource.data.userId == userId;
-      // Only allow reading, updating, and deleting an access request if the authenticated user's ID matches the user ID in the path and the document exists.
-      allow get, update, delete: if isExistingOwner(userId);
-        
-      // Allow listing access requests only for the owner.
-      allow list: if isOwner(userId);
     }
   }
 }
