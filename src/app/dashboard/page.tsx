@@ -15,7 +15,7 @@ import { collection, doc, getDoc, query, where, getDocs, DocumentData, addDoc, s
 import { useEffect, useState, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { AlertCircle, HelpCircle } from 'lucide-react';
+import { AlertCircle, HelpCircle, Star } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +36,7 @@ interface UserProfile {
 interface Team {
     id: string;
     name: string;
+    techLeadId: string;
     availableServiceIds?: string[];
 }
 
@@ -351,7 +352,15 @@ export default function DashboardPage() {
                                 </AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
-                                <p className="truncate font-medium">{member.displayName}</p>
+                                <div className="flex items-center gap-2">
+                                     <p className="truncate font-medium">{member.displayName}</p>
+                                      {team?.techLeadId === member.uid && (
+                                        <Badge variant="secondary" className="flex items-center gap-1">
+                                            <Star className="h-3 w-3" />
+                                            Tech Lead
+                                        </Badge>
+                                    )}
+                                </div>
                                 <p className="truncate text-sm text-muted-foreground">
                                 {member.email}
                                 </p>
