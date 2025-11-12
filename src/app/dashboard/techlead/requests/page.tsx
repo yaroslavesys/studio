@@ -58,7 +58,7 @@ export default function TechLeadRequestsPage() {
   // This query finds all PENDING requests from the members of the tech lead's team.
   const teamRequestsQuery = useMemoFirebase(() => {
     if (!firestore || !teamMembers || teamMembers.length === 0) return null;
-    const memberIds = teamMembers.map(m => m.id);
+    const memberIds = teamMembers.map(m => m.uid);
     if(memberIds.length === 0) return null;
     return query(
       collection(firestore, 'requests'),
@@ -70,8 +70,12 @@ export default function TechLeadRequestsPage() {
 
   const usersMap = useMemo(() => {
     if (!teamMembers) return new Map<string, UserProfile>();
-    return new Map(teamMembers.map((member) => [member.id, member]));
-  }, [teamMembers]);
+    const fullUsersMap = new Map(teamMembers.map((member) => [member.uid, member]));
+    if(userProfile) { // Also add the tech lead to the map
+      fullUsersMap.set(userProfile.uid, userProfile);
+    }
+    return fullUsersMap;
+  }, [teamMembers, userProfile]);
 
   const servicesMap = useMemo(() => {
     if (!services) return new Map<string, string>();

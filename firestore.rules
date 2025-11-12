@@ -107,8 +107,7 @@ service cloud.firestore {
                       request.resource.data.status == 'pending';
       
       // Helper function to check if the request is from a user in the tech lead's team
-      function isRequestFromTechLeadTeam(requestDoc) {
-        let requestUserId = requestDoc.data.userId;
+      function isRequestFromTechLeadTeam(requestUserId) {
         let techLeadTeamId = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId;
         let requestUserTeamId = get(/databases/$(database)/documents/users/$(requestUserId)).data.teamId;
         return isTechLead() && requestUserTeamId == techLeadTeamId;
@@ -117,7 +116,7 @@ service cloud.firestore {
       // Users can read their own requests.
       // Admins can read any request.
       // TechLeads can read requests from users in their team.
-      allow get: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isRequestFromTechLeadTeam(resource));
+      allow read: if isSignedIn() && (isAdmin() || isOwner(resource.data.userId) || isRequestFromTechLeadTeam(resource.data.userId));
       
       // Admins and relevant TechLeads can update requests according to the workflow.
       allow update: if isSignedIn() && (
@@ -125,7 +124,7 @@ service cloud.firestore {
         (isTechLead() &&
          get(/databases/$(database)/documents/requests/$(requestId)).data.status == 'pending' &&
          (request.resource.data.status == 'approved_by_tech_lead' || request.resource.data.status == 'rejected') &&
-         isRequestFromTechLeadTeam(get(/databases/$(database)/documents/requests/$(requestId))) &&
+         isRequestFromTechLeadTeam(get(/databases/$(database)/documents/requests/$(requestId)).data.userId) &&
          request.resource.data.resolvedBy == request.auth.uid &&
          request.resource.data.resolvedAt == request.time
         ) ||
@@ -138,7 +137,7 @@ service cloud.firestore {
         ) ||
         // Admin can also directly approve or reject a pending request.
         (isAdmin() &&
-         get(/databases/$(database)/documents/requests/$(requestId)).data.status == 'pending' &&
+         get(/databases/A(database)/documents/requests/$(requestId)).data.status == 'pending' &&
          (request.resource.data.status == 'approved_by_tech_lead' || request.resource.data.status == 'rejected') &&
          request.resource.data.resolvedBy == request.auth.uid &&
          request.resource.data.resolvedAt == request.time
@@ -147,9 +146,6 @@ service cloud.firestore {
       
       // Only admins can delete requests.
       allow delete: if isAdmin();
-
-      // Admins and techleads can list requests.
-      allow list: if isSignedIn() && (isAdmin() || isTechLead());
     }
     
     // CONTACTS

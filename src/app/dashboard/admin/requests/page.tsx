@@ -59,14 +59,13 @@ export default function AdminRequestsPage() {
 
   // Admins see requests that are either pending their final approval or can be fast-tracked
   const adminRequestsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !userProfile?.isAdmin) return null;
     return query(
       collection(firestore, 'requests'), 
       where('status', 'in', ['approved_by_tech_lead', 'pending']),
-      orderBy('status', 'desc'), // Show 'pending' before 'approved_by_tech_lead'
       orderBy('requestedAt', 'asc')
     );
-  }, [firestore]);
+  }, [firestore, userProfile]);
 
   const isLoading = isLoadingProfile || isLoadingServices || isLoadingUsers;
   const error = profileError || servicesError || usersError;
