@@ -63,12 +63,14 @@ export default function AdminRequestsPage() {
     return collection(firestore, 'users');
   }, [firestore]);
 
+  // This query is now safe because firestore.rules allow `list` for admins and tech leads.
   const requestsQuery = useMemoFirebase(() => {
-    if (!firestore || !userProfile?.isAdmin) return null;
-    return query(
-      collection(firestore, 'requests'), 
-      orderBy('requestedAt', 'asc')
-    );
+    if (!firestore || !userProfile) return null;
+    // Admins and tech leads can list all requests.
+    if (userProfile.isAdmin || userProfile.isTechLead) {
+        return query(collection(firestore, 'requests'), orderBy('requestedAt', 'asc'));
+    }
+    return null;
   }, [firestore, userProfile]);
 
   const { data: requests, isLoading: isLoadingRequests, error: requestsError } = useCollection<AccessRequest>(requestsQuery);
@@ -77,7 +79,7 @@ export default function AdminRequestsPage() {
 
   const filteredAdminRequests = useMemo(() => {
       if (!userProfile?.isAdmin || !requests) return [];
-      // client-side filter
+      // client-side filter for admins to see only actionable requests
       return requests.filter(req => ['approved_by_tech_lead', 'pending'].includes(req.status));
   }, [requests, userProfile]);
 
@@ -135,5 +137,3 @@ export default function AdminRequestsPage() {
     </div>
   );
 }
-
-
