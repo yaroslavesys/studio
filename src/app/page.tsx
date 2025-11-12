@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,13 +23,40 @@ export default function HomePage() {
   const { user, isLoading } = useUser();
   const { toast } = useToast();
 
-  // Redirect to dashboard if user is already logged in
+  // Step 2: Check for redirect result on component mount
   useEffect(() => {
-    if (!isLoading && user) {
-      router.push('/dashboard');
-    }
-  }, [user, isLoading, router]);
+    if (!auth || isLoading) return;
 
+    // If a user is already logged in, redirect to the dashboard.
+    if (user) {
+      router.push('/dashboard');
+      return;
+    }
+
+    // This handles the redirect back from Google
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result) {
+          // User successfully signed in.
+          await createUserProfile(result.user);
+          await result.user.getIdToken(true); // Refresh token for claims
+          router.push('/dashboard');
+        }
+        // If result is null, it means the user just landed on the page
+        // without coming from a redirect.
+      })
+      .catch((error) => {
+        console.error('Error during redirect result processing: ', error);
+        toast({
+          variant: 'destructive',
+          title: 'Uh oh! Something went wrong.',
+          description: error.message || 'There was a problem with the sign-in process.',
+        });
+      });
+  }, [auth, user, isLoading, router, toast]);
+
+
+  // Step 1: Initiate the redirect when the user clicks the button
   const handleSignIn = async () => {
     if (!auth) {
       console.error('Firebase Auth is not initialized.');
@@ -41,23 +68,8 @@ export default function HomePage() {
       return;
     }
     const provider = new GoogleAuthProvider();
-    try {
-      const result = await signInWithPopup(auth, provider);
-      await createUserProfile(result.user);
-      
-      // Force refresh the ID token to get the latest custom claims.
-      // This is the critical step to make roles available to security rules.
-      await result.user.getIdToken(true);
-
-      router.push('/dashboard');
-    } catch (error: any) {
-      console.error('Error during sign-in: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Uh oh! Something went wrong.',
-        description: error.message || 'There was a problem with the sign-in process.',
-      });
-    }
+    // This will redirect the user to the Google sign-in page
+    await signInWithRedirect(auth, provider);
   };
 
   const createUserProfile = async (user: User) => {
@@ -65,23 +77,20 @@ export default function HomePage() {
     const userDocRef = doc(firestore, 'users', user.uid);
     const userDoc = await getDoc(userDocRef);
 
-    // Create a profile only if it doesn't exist.
-    // Roles (isAdmin, isTechLead) are NOT set here. They are set via Custom Claims.
     if (!userDoc.exists()) {
       await setDoc(userDocRef, {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
         photoURL: user.photoURL,
-        isAdmin: false, // Default role
-        isTechLead: false, // Default role
+        isAdmin: false, 
+        isTechLead: false, 
       });
     }
   };
 
 
   if (isLoading || user) {
-    // Show a loading state or nothing while checking auth state or redirecting
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p>Loading...</p>
