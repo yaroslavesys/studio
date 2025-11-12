@@ -13,7 +13,7 @@ import {
   SidebarFooter,
   SidebarInset,
 } from '@/components/ui/sidebar';
-import { LogOut, Shield, Users, Briefcase, Archive } from 'lucide-react';
+import { LogOut, Shield, Users, Briefcase, Archive, Mail } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { signOut } from 'firebase/auth';
 import { useRouter, usePathname } from 'next/navigation';
@@ -63,6 +63,16 @@ export default function TechLeadDashboardLayout({
                   Team Requests
                 </Link>
               </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <Link href="/dashboard/contacts">
+                <SidebarMenuButton
+                  isActive={pathname.startsWith('/dashboard/contacts')}
+                >
+                  <Mail />
+                  Contacts
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>

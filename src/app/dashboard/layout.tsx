@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useFirestore, useUser } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { useUser } from '@/firebase';
 
 interface UserProfile {
   isAdmin: boolean;
@@ -18,11 +17,10 @@ export default function DashboardLayout({
   const { user, isUserLoading: isLoading } = useUser();
   const router = useRouter();
   const pathname = usePathname();
-  const firestore = useFirestore();
   const [isCheckingRole, setIsCheckingRole] = useState(true);
 
   useEffect(() => {
-    if (isLoading || !firestore) {
+    if (isLoading) {
       return;
     }
     if (!user) {
@@ -31,53 +29,44 @@ export default function DashboardLayout({
     }
 
     const checkUserRole = async () => {
-      const userDocRef = doc(firestore, 'users', user.uid);
-      try {
-        const userDoc = await getDoc(userDocRef);
+      // Force a refresh of the ID token to get the latest custom claims.
+      const idTokenResult = await user.getIdTokenResult(true);
+      const claims = (idTokenResult.claims || {}) as Partial<UserProfile>;
+      const isAdmin = claims.isAdmin === true;
+      const isTechLead = claims.isTechLead === true;
 
-        if (userDoc.exists()) {
-          const userProfile = userDoc.data() as UserProfile;
-          if (userProfile.isAdmin) {
-            if (!pathname.startsWith('/dashboard/admin')) {
-              router.replace('/dashboard/admin');
-            }
-          } else if (userProfile.isTechLead) {
-            if (!pathname.startsWith('/dashboard/techlead')) {
-              router.replace('/dashboard/techlead');
-            }
-          } else {
-            if (pathname.startsWith('/dashboard/admin') || pathname.startsWith('/dashboard/techlead')) {
-              router.replace('/dashboard');
-            }
-          }
-        } else {
-            if (pathname.startsWith('/dashboard/admin') || pathname.startsWith('/dashboard/techlead')) {
-              router.replace('/dashboard');
-            }
+      if (isAdmin) {
+        if (!pathname.startsWith('/dashboard/admin')) {
+          router.replace('/dashboard/admin');
         }
-      } catch (error) {
-        console.error("Error checking user role:", error);
-         if (pathname.startsWith('/dashboard/admin') || pathname.startsWith('/dashboard/techlead')) {
-            router.replace('/dashboard');
-          }
-      } finally {
-        setIsCheckingRole(false);
+      } else if (isTechLead) {
+        if (!pathname.startsWith('/dashboard/techlead')) {
+          router.replace('/dashboard/techlead');
+        }
+      } else {
+        if (
+          pathname.startsWith('/dashboard/admin') ||
+          pathname.startsWith('/dashboard/techlead')
+        ) {
+          router.replace('/dashboard');
+        }
       }
+      setIsCheckingRole(false);
     };
 
     checkUserRole();
-  }, [user, isLoading, router, firestore, pathname]);
+  }, [user, isLoading, router, pathname]);
 
   if (isLoading || isCheckingRole) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p>Loading user data...</p>
+        <p>Verifying user role...</p>
       </div>
     );
   }
-  
+
   if (!user) {
-     return (
+    return (
       <div className="flex min-h-screen items-center justify-center">
         <p>Redirecting to login...</p>
       </div>
