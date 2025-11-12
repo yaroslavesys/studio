@@ -1,3 +1,4 @@
+
 // This script sets Custom User Claims (roles) for Firebase users.
 // It is designed to be run from an environment that has administrative access
 // to your Firebase project, such as Google Cloud Shell.
@@ -13,12 +14,11 @@ const usersToUpdate = [
     uid: 'REPLACE_WITH_ADMIN_UID', 
     claims: { isAdmin: true, isTechLead: false }
   },
-  {
-    // The user who should be a tech lead
-    uid: 'REPLACE_WITH_TECH_LEAD_UID', 
-    claims: { isAdmin: false, isTechLead: true }
-  }
-  // Add more users here if needed.
+  // Example for a tech lead. You can add more users.
+  // {
+  //   uid: 'REPLACE_WITH_TECH_LEAD_UID', 
+  //   claims: { isAdmin: false, isTechLead: true }
+  // }
 ];
 
 // --- Initialization ---
