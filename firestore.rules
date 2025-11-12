@@ -25,9 +25,10 @@ service cloud.firestore {
       
       // Users can create their own profile.
       // Roles are set based on email during creation and cannot be self-assigned.
-      allow create: if isSignedIn() && isOwner(userId) &&
+       allow create: if isSignedIn() && isOwner(userId) &&
         (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') || request.resource.data.isAdmin == false) &&
         (request.resource.data.isTechLead == (request.auth.token.email == 'yaroslav_system.admin@newdevils.net') || request.resource.data.isTechLead == false);
+
 
       // Users can update their own profile, but they CANNOT change their roles.
       // Admins can update any user profile, including roles.
@@ -56,14 +57,6 @@ service cloud.firestore {
     }
 
     // REQUESTS
-    // Rules for the entire collection (for list queries)
-    match /requests/{document=**} {
-      // Admins and TechLeads can list requests.
-      // This rule is simple and relies on data in the user's profile.
-       allow list: if getUserData().isAdmin == true || getUserData().isTechLead == true;
-    }
-    
-    // Rule for individual document access (get, create, update, delete)
     match /requests/{requestId} {
       // Users can create their own requests.
       // The request must be for the user themselves and start in 'pending' state.
@@ -71,9 +64,10 @@ service cloud.firestore {
                       request.resource.data.userId == request.auth.uid &&
                       request.resource.data.status == 'pending';
       
-      // Admins and TechLeads can read any request to manage them.
+      // Admins and TechLeads can read any request.
       // Users can only read their own requests.
-      allow get: if (getUserData().isAdmin == true || getUserData().isTechLead == true || resource.data.userId == request.auth.uid);
+      allow read: if isSignedIn() && 
+                    (getUserData().isAdmin == true || getUserData().isTechLead == true || resource.data.userId == request.auth.uid);
 
       // Admins and TechLeads can update requests.
       allow update: if (getUserData().isAdmin == true || getUserData().isTechLead == true);
