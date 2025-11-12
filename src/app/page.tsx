@@ -24,25 +24,25 @@ export default function HomePage() {
   const [isProcessing, setIsProcessing] = useState(true);
 
   useEffect(() => {
-    // If a user is already logged in, redirect them to the dashboard.
+    // If user is already authenticated, redirect to dashboard.
     if (!isUserLoading && user) {
       router.push('/dashboard');
-      return; // Stop further execution
+      return;
     }
 
-    // This block handles the redirect result from Google Sign-In.
+    // Only process redirect result if we are sure there is no user.
     if (!isUserLoading && !user && auth) {
       getRedirectResult(auth)
         .then(async (result) => {
           if (result) {
-            // User has successfully signed in.
+            // User has successfully signed in via redirect.
             const loggedInUser = result.user;
-            await createUserProfile(loggedInUser); // Ensure profile exists
-            await loggedInUser.getIdToken(true); // Force token refresh for custom claims
-            router.push('/dashboard'); // Redirect to dashboard
+            await createUserProfile(loggedInUser);
+            // Force token refresh to get custom claims on the first login.
+            await loggedInUser.getIdToken(true); 
+            router.push('/dashboard'); // Redirect to dashboard.
           } else {
-            // No redirect result, meaning the user is visiting the page normally.
-            // It's safe to stop the processing indicator and show the login button.
+            // No redirect result, so it's a fresh visit. Stop processing.
             setIsProcessing(false);
           }
         })
@@ -59,7 +59,14 @@ export default function HomePage() {
   }, [user, isUserLoading, auth, router, toast]);
 
   const handleSignIn = () => {
-    if (!auth) return;
+    if (!auth) {
+        toast({
+            variant: "destructive",
+            title: "Authentication service not ready",
+            description: "Please try again in a moment.",
+        });
+        return;
+    }
     const provider = new GoogleAuthProvider();
     // Start the sign-in process by redirecting the user.
     signInWithRedirect(auth, provider);
@@ -68,18 +75,23 @@ export default function HomePage() {
   const createUserProfile = async (user: User) => {
     const firestore = getFirestore();
     const userDocRef = doc(firestore, 'users', user.uid);
-    const userDoc = await getDoc(userDocRef);
+    try {
+        const userDoc = await getDoc(userDocRef);
 
-    if (!userDoc.exists()) {
-      // Only create a new profile if one doesn't exist.
-      await setDoc(userDocRef, {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        isAdmin: false, 
-        isTechLead: false, 
-      });
+        if (!userDoc.exists()) {
+          await setDoc(userDocRef, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            isAdmin: false, 
+            isTechLead: false,
+          }, { merge: true });
+        }
+    } catch (error) {
+        console.error("Error creating or checking user profile:", error);
+        // We don't re-throw here to not block the login flow.
+        // Error will be logged to the console.
     }
   };
 
@@ -91,7 +103,6 @@ export default function HomePage() {
       </div>
     );
   }
-
 
   // If not loading and no user, show the login page.
   return (
