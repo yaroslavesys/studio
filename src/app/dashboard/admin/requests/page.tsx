@@ -63,24 +63,20 @@ export default function AdminRequestsPage() {
     return collection(firestore, 'users');
   }, [firestore]);
 
-  // This query is now safe because firestore.rules allow `list` for admins and tech leads.
+  // Admins can list all requests. This query will be secured by rules.
   const requestsQuery = useMemoFirebase(() => {
-    if (!firestore || !userProfile) return null;
-    // Admins and tech leads can list all requests.
-    if (userProfile.isAdmin || userProfile.isTechLead) {
-        return query(collection(firestore, 'requests'), orderBy('requestedAt', 'asc'));
-    }
-    return null;
-  }, [firestore, userProfile]);
+    if (!firestore || !userProfile?.isAdmin) return null;
+    return query(collection(firestore, 'requests'), orderBy('requestedAt', 'asc'));
+  }, [firestore, userProfile?.isAdmin]);
 
   const { data: requests, isLoading: isLoadingRequests, error: requestsError } = useCollection<AccessRequest>(requestsQuery);
   const { data: services, isLoading: isLoadingServices, error: servicesError } = useCollection<Service>(servicesQuery);
   const { data: users, isLoading: isLoadingUsers, error: usersError } = useCollection<UserProfile>(usersQuery);
 
-  const filteredAdminRequests = useMemo(() => {
+  const actionableRequests = useMemo(() => {
       if (!userProfile?.isAdmin || !requests) return [];
       // client-side filter for admins to see only actionable requests
-      return requests.filter(req => ['approved_by_tech_lead', 'pending'].includes(req.status));
+      return requests.filter(req => ['approved_by_tech_lead'].includes(req.status));
   }, [requests, userProfile]);
 
 
@@ -120,12 +116,12 @@ export default function AdminRequestsPage() {
         <CardHeader>
           <CardTitle>Access Requests</CardTitle>
           <CardDescription>
-            Review and manage all user requests for services and tools.
+            Review and manage user requests that have been approved by tech leads.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <RequestsTable 
-            requests={filteredAdminRequests}
+            requests={actionableRequests}
             isLoading={isLoading}
             error={error}
             userProfile={userProfile}

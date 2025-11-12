@@ -84,17 +84,12 @@ export default function TechLeadRequestsPage() {
     return query(
       collection(firestore, 'requests'),
       where('userId', 'in', memberIds),
+      where('status', '==', 'pending'),
       orderBy('requestedAt', 'desc')
     );
   }, [firestore, teamMembers]);
 
   const { data: requests, isLoading: isLoadingRequests, error: requestsError } = useCollection<AccessRequest>(teamRequestsQuery);
-
-  const pendingRequests = useMemo(() => {
-    if (!requests) return [];
-    return requests.filter(req => req.status === 'pending');
-  }, [requests]);
-
 
   const usersMap = useMemo(() => {
     if (!teamMembers) return new Map<string, UserProfile>();
@@ -158,7 +153,7 @@ export default function TechLeadRequestsPage() {
         </CardHeader>
         <CardContent>
             <TechleadRequestsTable 
-                requests={pendingRequests} 
+                requests={requests} 
                 isLoading={isLoading}
                 error={error}
                 userProfile={userProfile} 
