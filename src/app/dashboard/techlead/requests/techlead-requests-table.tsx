@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   doc,
   updateDoc,
@@ -115,12 +115,10 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
 
 export function TechleadRequestsTable({ 
     teamMemberIds,
-    userProfile,
     usersMap,
     servicesMap,
 }: { 
-    teamMemberIds: string[] | null,
-    userProfile?: UserProfile | null,
+    teamMemberIds: string[],
     usersMap: Map<string, UserProfile>,
     servicesMap: Map<string, string>,
 }) {

@@ -58,7 +58,7 @@ export default function TechLeadRequestsPage() {
   }, [firestore, userProfile?.teamId]);
 
   const { data: teamMembers, isLoading: isLoadingMembers, error: membersError } = useCollection<UserProfile>(teamMembersQuery);
-  const teamMemberIds = useMemo(() => teamMembers?.map(m => m.uid) || null, [teamMembers]);
+  const teamMemberIds = useMemo(() => teamMembers?.map(m => m.uid) || [], [teamMembers]);
 
   const servicesQuery = useMemoFirebase(() => {
     if(!firestore) return null;
@@ -130,7 +130,6 @@ export default function TechLeadRequestsPage() {
         <CardContent>
             <TechleadRequestsTable 
                 teamMemberIds={teamMemberIds}
-                userProfile={userProfile} 
                 usersMap={usersMap}
                 servicesMap={servicesMap}
             />
