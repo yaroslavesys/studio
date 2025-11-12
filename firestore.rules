@@ -54,6 +54,7 @@ service cloud.firestore {
       
       // Admins and TechLeads can read any request based on roles at time of request.
       // Users can only read their own requests.
+      // This rule DOES NOT use get() and is safe for list queries.
       allow read: if isSignedIn() && 
                     (resource.data.userId == request.auth.uid || 
                      (getUserData().isAdmin == true && resource.data.userIsAdmin == true) || 
