@@ -1,9 +1,9 @@
 export const firebaseConfig = {
   "projectId": "devils-acces",
-  "appId": "1:366357516428:web:1e8e2e283a0d33e5b46ba9",
-  "apiKey": "AIzaSyC9wzpitv6aM6TjNqJWaM1FLMeR7y7iJvo",
-  "authDomain": "devils-acces.firebaseapp.com",
+  "appId": "1:1078772393169:web:1a91d1e7892e673f848e43",
   "storageBucket": "devils-acces.appspot.com",
-  "messagingSenderId": "366357516428",
-  "measurementId": "G-5G34V92J21"
+  "apiKey": "AIzaSyBCsT1y5wS-gJWyso9ECXNif3Lh_s8k2pA",
+  "authDomain": "devils-acces.firebaseapp.com",
+  "messagingSenderId": "1078772393169",
+  "measurementId": "G-FKE6N1YJ0J"
 };
