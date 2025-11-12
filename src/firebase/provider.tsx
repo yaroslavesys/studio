@@ -1,9 +1,10 @@
+
 'use client';
 
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
-import { Auth, User, onIdTokenChanged } from 'firebase/auth';
+import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 import { Functions } from 'firebase/functions';
 
@@ -83,13 +84,13 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     setUserAuthState(prevState => ({ ...prevState, isUserLoading: true }));
 
     // onIdTokenChanged is more robust for redirect flows than onAuthStateChanged
-    const unsubscribe = onIdTokenChanged(
+    const unsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => { // Auth state determined
         setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
       },
       (error) => { // Auth listener error
-        console.error("FirebaseProvider: onIdTokenChanged error:", error);
+        console.error("FirebaseProvider: onAuthStateChanged error:", error);
         setUserAuthState({ user: null, isUserLoading: false, userError: error });
       }
     );
