@@ -311,7 +311,7 @@ export function ServicesTable() {
             ) : (
               <TableRow>
                 <TableCell colSpan={3} className="text-center">
-                  No services found.
+                  No services found. Create one to get started.
                 </TableCell>
               </TableRow>
             )}

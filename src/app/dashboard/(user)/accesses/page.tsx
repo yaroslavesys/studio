@@ -124,7 +124,7 @@ export default function AccessesPage() {
         .then(() => {
              toast({
                 title: "Request Submitted",
-                description: `Your request for ${service.name} has been submitted for tech lead approval.`,
+                description: `Your request for ${service.name} has been submitted for approval.`,
             });
         })
         .catch((e) => {
@@ -177,7 +177,7 @@ export default function AccessesPage() {
                         <h3 className="mt-4 text-lg font-semibold">No Services Available</h3>
                         <p className="mt-1 text-sm text-muted-foreground">
                             {profile?.isAdmin 
-                                ? "There are no services configured in the system yet."
+                                ? "There are no services configured in the system yet. Go to the Admin Panel to create one."
                                 : "There are no services configured for your team to request."}
                         </p>
                     </div>
