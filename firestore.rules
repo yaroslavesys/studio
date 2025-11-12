@@ -50,6 +50,7 @@ service cloud.firestore {
     match /requests/{requestId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
+      // Admins can see all requests
       allow list: if isAdmin();
 
       function isUserOnTechLeadsTeam(userId) {
@@ -57,7 +58,10 @@ service cloud.firestore {
         let userTeamId = getUserData(userId).teamId;
         return isTechLead() && techLeadTeamId != null && techLeadTeamId == userTeamId;
       }
-      allow get: if isSignedIn() && (
+      
+      // Tech Leads can list requests for their team members
+      // A user can list their own requests
+      allow read: if isSignedIn() && (
         resource.data.userId == request.auth.uid || 
         isAdmin() ||
         isUserOnTechLeadsTeam(resource.data.userId)

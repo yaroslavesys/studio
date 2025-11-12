@@ -10,9 +10,7 @@ import {
   collection,
   query,
   where,
-  orderBy,
   getDocs,
-  QuerySnapshot,
   DocumentData,
 } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -135,7 +133,7 @@ export function TechleadRequestsTable({
 
 
   useEffect(() => {
-    if (!firestore || !teamMemberIds || teamMemberIds.length === 0) {
+    if (!firestore || !currentUser || !teamMemberIds.length) {
         setIsLoading(false);
         setRequests([]);
         return;
@@ -146,31 +144,33 @@ export function TechleadRequestsTable({
         setError(null);
         try {
             const requestsRef = collection(firestore, 'requests');
+            // This query fetches all requests from team members that are pending.
             const q = query(
-                requestsRef,
-                where('userId', 'in', teamMemberIds),
-                where('status', '==', 'pending'),
-                orderBy('requestedAt', 'desc')
+                requestsRef, 
+                where('userId', 'in', teamMemberIds), 
+                where('status', '==', 'pending')
             );
-            
-            const snapshot = await getDocs(q);
-            const fetchedRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccessRequest));
-            setRequests(fetchedRequests);
+
+            const querySnapshot = await getDocs(q);
+            const fetchedRequests = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccessRequest));
+
+            setRequests(fetchedRequests.sort((a, b) => b.requestedAt.toMillis() - a.requestedAt.toMillis()));
 
         } catch (err: any) {
              const permissionError = new FirestorePermissionError({
-                path: 'requests',
+                path: 'requests', // This is a best-effort path for the error
                 operation: 'list',
              });
+             setError(permissionError); // Set the detailed error
+             // We emit it as well so the dev overlay catches it.
              errorEmitter.emit('permission-error', permissionError);
-             setError(err);
         } finally {
             setIsLoading(false);
         }
     };
 
     fetchRequests();
-  }, [firestore, teamMemberIds]);
+  }, [firestore, currentUser, teamMemberIds]);
 
 
   const handleApprove = (request: AccessRequest) => {
