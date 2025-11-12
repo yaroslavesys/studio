@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/card';
 import { TechleadRequestsTable } from './techlead-requests-table';
 import { useFirestore, useUser, useMemoFirebase, useCollection, useDoc } from '@/firebase';
-import { collection, query, where, doc, orderBy, FirestoreError } from 'firebase/firestore';
+import { collection, query, where, doc, FirestoreError } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
@@ -34,16 +34,6 @@ interface Service {
     name: string;
 }
 
-interface AccessRequest {
-  id: string;
-  userId: string;
-  serviceId: string;
-  status: 'pending' | 'approved_by_tech_lead' | 'completed' | 'rejected';
-  requestedAt: any;
-  notes?: string;
-  resolvedAt?: any;
-}
-
 export default function TechLeadRequestsPage() {
   const firestore = useFirestore();
   const { user } = useUser();
@@ -62,13 +52,13 @@ export default function TechLeadRequestsPage() {
 
   const { data: team, isLoading: isLoadingTeam, error: teamError } = useDoc<Team>(teamRef);
 
-
   const teamMembersQuery = useMemoFirebase(() => {
     if (!firestore || !userProfile?.teamId) return null;
     return query(collection(firestore, 'users'), where('teamId', '==', userProfile.teamId));
   }, [firestore, userProfile?.teamId]);
 
   const { data: teamMembers, isLoading: isLoadingMembers, error: membersError } = useCollection<UserProfile>(teamMembersQuery);
+  const teamMemberIds = useMemo(() => teamMembers?.map(m => m.uid) || null, [teamMembers]);
 
   const servicesQuery = useMemoFirebase(() => {
     if(!firestore) return null;
@@ -76,20 +66,6 @@ export default function TechLeadRequestsPage() {
   }, [firestore]);
 
   const { data: services, isLoading: isLoadingServices, error: servicesError } = useCollection<Service>(servicesQuery);
-
-  const teamRequestsQuery = useMemoFirebase(() => {
-    if (!firestore || !teamMembers || teamMembers.length === 0) return null;
-    const memberIds = teamMembers.map(m => m.uid);
-    if(memberIds.length === 0) return null;
-    return query(
-      collection(firestore, 'requests'),
-      where('userId', 'in', memberIds),
-      where('status', '==', 'pending'),
-      orderBy('requestedAt', 'desc')
-    );
-  }, [firestore, teamMembers]);
-
-  const { data: requests, isLoading: isLoadingRequests, error: requestsError } = useCollection<AccessRequest>(teamRequestsQuery);
 
   const usersMap = useMemo(() => {
     if (!teamMembers) return new Map<string, UserProfile>();
@@ -105,8 +81,8 @@ export default function TechLeadRequestsPage() {
     return new Map(services.map((s) => [s.id, s.name]));
   }, [services]);
   
-  const isLoading = isLoadingProfile || isLoadingMembers || isLoadingServices || isLoadingRequests || isLoadingTeam;
-  const error = profileError || membersError || servicesError || requestsError || teamError;
+  const isLoading = isLoadingProfile || isLoadingMembers || isLoadingServices || isLoadingTeam;
+  const error = profileError || membersError || servicesError || teamError;
 
   if (isLoading) {
     return (
@@ -153,9 +129,7 @@ export default function TechLeadRequestsPage() {
         </CardHeader>
         <CardContent>
             <TechleadRequestsTable 
-                requests={requests} 
-                isLoading={isLoading}
-                error={error}
+                teamMemberIds={teamMemberIds}
                 userProfile={userProfile} 
                 usersMap={usersMap}
                 servicesMap={servicesMap}

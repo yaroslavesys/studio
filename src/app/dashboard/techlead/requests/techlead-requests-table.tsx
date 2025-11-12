@@ -7,8 +7,12 @@ import {
   updateDoc,
   serverTimestamp,
   FirestoreError,
+  collection,
+  query,
+  where,
+  orderBy
 } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -110,16 +114,12 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
 
 
 export function TechleadRequestsTable({ 
-    requests,
-    isLoading,
-    error,
+    teamMemberIds,
     userProfile,
     usersMap,
     servicesMap,
 }: { 
-    requests: AccessRequest[] | null, 
-    isLoading: boolean,
-    error: Error | FirestoreError | null,
+    teamMemberIds: string[] | null,
     userProfile?: UserProfile | null,
     usersMap: Map<string, UserProfile>,
     servicesMap: Map<string, string>,
@@ -129,6 +129,19 @@ export function TechleadRequestsTable({
   const { toast } = useToast();
   
   const [requestToReject, setRequestToReject] = useState<AccessRequest | null>(null);
+
+  const teamRequestsQuery = useMemoFirebase(() => {
+    if (!firestore || !teamMemberIds || teamMemberIds.length === 0) return null;
+    return query(
+      collection(firestore, 'requests'),
+      where('userId', 'in', teamMemberIds),
+      where('status', '==', 'pending'),
+      orderBy('requestedAt', 'desc')
+    );
+  }, [firestore, teamMemberIds]);
+
+  const { data: requests, isLoading, error } = useCollection<AccessRequest>(teamRequestsQuery);
+
 
   const handleApprove = (request: AccessRequest) => {
     if (!firestore || !currentUser) return;
@@ -251,4 +264,3 @@ export function TechleadRequestsTable({
     </>
   );
 }
-
