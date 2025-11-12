@@ -1,14 +1,32 @@
 // Этот скрипт устанавливает Custom Claims (роли) для пользователей Firebase.
 // Запускайте его из терминала: node set-admin-claims.js
+// Или через Google Cloud Shell.
 
 const admin = require('firebase-admin');
 
-// 1. Убедитесь, что файл serviceAccountKey.json находится в корне проекта
-const serviceAccount = require('./serviceAccountKey.json');
+// ВАЖНО:
+// При запуске в Google Cloud Shell или другой среде Google Cloud,
+// инициализация происходит автоматически без файла ключа.
+// При локальном запуске - убедитесь, что у вас настроены учетные данные
+// через `gcloud auth application-default login` или есть serviceAccountKey.json
+try {
+  admin.initializeApp();
+  console.log("Инициализация Firebase Admin SDK прошла успешно (через учетные данные среды).");
+} catch (e) {
+  try {
+    const serviceAccount = require('./serviceAccountKey.json');
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log("Инициализация Firebase Admin SDK прошла успешно (через файл serviceAccountKey.json).");
+  } catch (e2) {
+      console.error('\x1b[31m%s\x1b[0m', 'Критическая ошибка: Не удалось инициализировать Firebase Admin SDK.');
+      console.error('Причина 1: Не найдена конфигурация в среде Google Cloud.');
+      console.error('Причина 2: Файл serviceAccountKey.json не найден или некорректен.');
+      process.exit(1);
+  }
+}
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
 
 // 2. Вставьте UID нужных пользователей сюда
 const usersToUpdate = [
