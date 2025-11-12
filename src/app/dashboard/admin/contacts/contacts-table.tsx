@@ -112,7 +112,7 @@ function ContactForm({
     },
   });
 
-  const onSubmit = async (values: z.infer<typeof contactFormSchema>) => {
+  const onSubmit = (values: z.infer<typeof contactFormSchema>) => {
     if (!firestore) return;
 
     const updateData: any = { ...values };
@@ -120,44 +120,34 @@ function ContactForm({
       updateData.teamId = null;
     }
 
-    try {
+    
       if (isEditing) {
         const contactDocRef = doc(firestore, 'contacts', contact.id);
-        await updateDoc(contactDocRef, updateData).catch((e) => {
+        updateDoc(contactDocRef, updateData).catch(async () => {
            const permissionError = new FirestorePermissionError({
             path: contactDocRef.path,
             operation: 'update',
             requestResourceData: updateData,
           });
           errorEmitter.emit('permission-error', permissionError);
-          throw permissionError;
         });
 
         toast({ title: 'Contact Updated', description: `The ${values.name} link has been updated.` });
 
       } else { // Creating
         const contactsCollectionRef = collection(firestore, 'contacts');
-        await addDoc(contactsCollectionRef, updateData).catch((e) => {
+        addDoc(contactsCollectionRef, updateData).catch(async () => {
             const permissionError = new FirestorePermissionError({
             path: contactsCollectionRef.path,
             operation: 'create',
             requestResourceData: updateData,
           });
           errorEmitter.emit('permission-error', permissionError);
-          throw permissionError;
         });
         toast({ title: 'Contact Created', description: `The ${values.name} link has been created.` });
       }
 
       onFinished();
-    } catch (error: any) {
-      console.error('Error saving contact: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Save Failed',
-        description: error.message || 'Could not save the contact link.',
-      });
-    }
   };
 
 
@@ -297,27 +287,17 @@ export function ContactsTable() {
   };
 
 
-  const handleDelete = async (contactToDelete: Contact) => {
+  const handleDelete = (contactToDelete: Contact) => {
     if (!firestore) return;
-    try {
-      const contactDocRef = doc(firestore, 'contacts', contactToDelete.id);
-      await deleteDoc(contactDocRef).catch((e) => {
+    const contactDocRef = doc(firestore, 'contacts', contactToDelete.id);
+    deleteDoc(contactDocRef).catch(async () => {
         const permissionError = new FirestorePermissionError({
           path: contactDocRef.path,
           operation: 'delete',
         });
         errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
       });
       toast({ title: 'Contact Deleted', description: `The ${contactToDelete.name} link has been deleted.` });
-    } catch (error: any) {
-      console.error('Error deleting contact: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Delete Failed',
-        description: error.message || 'Could not delete the contact link.',
-      });
-    }
   };
   
   const isLoading = isLoadingContacts || isLoadingTeams;

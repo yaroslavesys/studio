@@ -149,14 +149,13 @@ function TeamForm({
             }
           }
         }
-        await batch.commit().catch((e) => {
+        await batch.commit().catch(async () => {
            const permissionError = new FirestorePermissionError({
             path: teamDocRef.path,
             operation: 'update',
             requestResourceData: values,
           });
           errorEmitter.emit('permission-error', permissionError);
-          throw permissionError;
         });
 
         toast({ title: 'Team Updated', description: `The ${values.name} team has been updated.` });
@@ -170,26 +169,20 @@ function TeamForm({
         const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
         batch.update(newTechLeadRef, { isTechLead: true });
         
-        await batch.commit().catch((e) => {
+        await batch.commit().catch(async () => {
             const permissionError = new FirestorePermissionError({
             path: teamsCollectionRef.path,
             operation: 'create',
             requestResourceData: values,
           });
           errorEmitter.emit('permission-error', permissionError);
-          throw permissionError;
         });
         toast({ title: 'Team Created', description: `The ${values.name} team has been created.` });
       }
 
       onFinished();
     } catch (error: any) {
-      console.error('Error saving team: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Save Failed',
-        description: error.message || 'Could not save the team.',
-      });
+      // The .catch() blocks above will handle permission errors
     }
   };
 
@@ -363,7 +356,7 @@ export function TeamsTable() {
     if (!firestore || !teams) return;
     const batch = writeBatch(firestore);
 
-    try {
+    
       // 1. Delete the team
       const teamDocRef = doc(firestore, 'teams', teamToDelete.id);
       batch.delete(teamDocRef);
@@ -381,24 +374,15 @@ export function TeamsTable() {
       }
       
       // 4. Commit the batch
-      await batch.commit().catch((e) => {
+      await batch.commit().catch(async () => {
         const permissionError = new FirestorePermissionError({
           path: teamDocRef.path,
           operation: 'delete',
         });
         errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
       });
 
       toast({ title: 'Team Deleted', description: `The ${teamToDelete.name} team has been deleted.` });
-    } catch (error: any) {
-      console.error('Error deleting team: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Delete Failed',
-        description: error.message || 'Could not delete the team.',
-      });
-    }
   };
 
   const isLoading = isLoadingTeams || isLoadingUsers || isLoadingServices;

@@ -96,7 +96,7 @@ function EditUserForm({
     },
   });
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = (values: z.infer<typeof formSchema>) => {
     const userDocRef = doc(firestore, 'users', user.uid);
     // If teamId is an empty string, convert it to null or delete it before updating
     const updateData: any = { ...values };
@@ -104,15 +104,14 @@ function EditUserForm({
       updateData.teamId = null; // Or delete updateData.teamId;
     }
 
-    try {
-      await updateDoc(userDocRef, updateData).catch((e) => {
+    
+      updateDoc(userDocRef, updateData).catch(async () => {
         const permissionError = new FirestorePermissionError({
           path: userDocRef.path,
           operation: 'update',
           requestResourceData: updateData,
         });
         errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
       });
 
       toast({
@@ -120,15 +119,6 @@ function EditUserForm({
         description: `Successfully updated ${user.displayName}.`,
       });
       onFinished();
-    } catch (error: any) {
-      console.error('Error updating user: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description:
-          error.message || 'Could not update user profile.',
-      });
-    }
   };
 
   return (

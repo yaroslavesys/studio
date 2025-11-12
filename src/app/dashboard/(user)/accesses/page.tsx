@@ -93,7 +93,7 @@ export default function AccessesPage() {
   const { data: availableServices, isLoading: isLoadingServices } = useCollection<Service>(availableServicesQuery);
   const { data: userRequestsData } = useCollection<AccessRequest>(userRequestsQuery);
   
-  const handleRequestAccess = async (service: Service) => {
+  const handleRequestAccess = (service: Service) => {
     if (!user || !firestore) return;
 
     const existingRequest = userRequestsData?.find(
@@ -123,18 +123,13 @@ export default function AccessesPage() {
                 description: `Your request for ${service.name} has been submitted for approval.`,
             });
         })
-        .catch((e) => {
+        .catch(async () => {
             const permissionError = new FirestorePermissionError({
                 path: requestsCollection.path,
                 operation: 'create',
                 requestResourceData: newRequest,
             });
             errorEmitter.emit('permission-error', permissionError);
-            toast({
-                variant: "destructive",
-                title: "Request Failed",
-                description: e.message || "Could not submit your access request.",
-            });
         });
 };
 

@@ -77,7 +77,7 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
     const { user: currentUser } = useUser();
     const [notes, setNotes] = useState('');
 
-    const handleReject = async () => {
+    const handleReject = () => {
         if (!firestore || !currentUser) return;
         
         const requestDocRef = doc(firestore, 'requests', request.id);
@@ -88,22 +88,17 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
             notes: notes || 'No notes provided.',
         };
 
-        try {
-            updateDoc(requestDocRef, updateData)
-            .catch((e) => {
+        updateDoc(requestDocRef, updateData)
+            .catch(async () => {
                 const permissionError = new FirestorePermissionError({
                     path: requestDocRef.path,
                     operation: 'update',
                     requestResourceData: updateData,
                 });
                 errorEmitter.emit('permission-error', permissionError);
-                throw permissionError;
             });
-            toast({ title: 'Request Rejected' });
-            onFinished();
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Action Failed', description: error.message });
-        }
+        toast({ title: 'Request Rejected' });
+        onFinished();
     };
     
     return (
@@ -162,14 +157,13 @@ export function RequestsTable({
     }
 
     updateDoc(requestDocRef, updateData)
-     .catch((e) => {
+     .catch(async () => {
         const permissionError = new FirestorePermissionError({
             path: requestDocRef.path,
             operation: 'update',
             requestResourceData: updateData,
         });
         errorEmitter.emit('permission-error', permissionError);
-        toast({ variant: 'destructive', title: 'Action Failed', description: e.message });
     });
     toast({ title: toastTitle });
   };
@@ -306,4 +300,3 @@ export function RequestsTable({
     </>
   );
 }
-

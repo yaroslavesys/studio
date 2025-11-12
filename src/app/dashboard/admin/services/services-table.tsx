@@ -94,47 +94,37 @@ function ServiceForm({
     },
   });
 
-  const onSubmit = async (values: z.infer<typeof serviceFormSchema>) => {
+  const onSubmit = (values: z.infer<typeof serviceFormSchema>) => {
     if (!firestore) return;
 
-    try {
+    
       if (isEditing) {
         const serviceDocRef = doc(firestore, 'services', service.id);
-        await updateDoc(serviceDocRef, values).catch((e) => {
+        updateDoc(serviceDocRef, values).catch(async () => {
            const permissionError = new FirestorePermissionError({
             path: serviceDocRef.path,
             operation: 'update',
             requestResourceData: values,
           });
           errorEmitter.emit('permission-error', permissionError);
-          throw permissionError;
         });
 
         toast({ title: 'Service Updated', description: `The ${values.name} service has been updated.` });
 
       } else { // Creating
         const servicesCollectionRef = collection(firestore, 'services');
-        await addDoc(servicesCollectionRef, values).catch((e) => {
+        addDoc(servicesCollectionRef, values).catch(async () => {
             const permissionError = new FirestorePermissionError({
             path: servicesCollectionRef.path,
             operation: 'create',
             requestResourceData: values,
           });
           errorEmitter.emit('permission-error', permissionError);
-          throw permissionError;
         });
         toast({ title: 'Service Created', description: `The ${values.name} service has been created.` });
       }
 
       onFinished();
-    } catch (error: any) {
-      console.error('Error saving service: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Save Failed',
-        description: error.message || 'Could not save the service.',
-      });
-    }
   };
 
 
@@ -214,27 +204,17 @@ export function ServicesTable() {
   };
 
 
-  const handleDelete = async (serviceToDelete: Service) => {
+  const handleDelete = (serviceToDelete: Service) => {
     if (!firestore) return;
-    try {
-      const serviceDocRef = doc(firestore, 'services', serviceToDelete.id);
-      await deleteDoc(serviceDocRef).catch((e) => {
+    const serviceDocRef = doc(firestore, 'services', serviceToDelete.id);
+    deleteDoc(serviceDocRef).catch(async () => {
         const permissionError = new FirestorePermissionError({
           path: serviceDocRef.path,
           operation: 'delete',
         });
         errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
       });
       toast({ title: 'Service Deleted', description: `The ${serviceToDelete.name} service has been deleted.` });
-    } catch (error: any) {
-      console.error('Error deleting service: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Delete Failed',
-        description: error.message || 'Could not delete the service.',
-      });
-    }
   };
   
   if (isLoading) {
