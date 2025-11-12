@@ -7,66 +7,63 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
-
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
     
     function isAdmin() {
+      // Check for admin role in the custom claims of the auth token.
       return request.auth.token.isAdmin == true;
     }
 
     function isTechLead() {
+      // Check for tech lead role in the custom claims of the auth token.
       return request.auth.token.isTechLead == true;
     }
 
     // USERS
+    // Users can read any profile.
+    // Users can create their own profile upon signing up.
+    // Users can update their own non-critical info (displayName, photoURL, teamId).
+    // Admins can update any user profile, including roles.
     match /users/{userId} {
       allow read: if isSignedIn();
-      
-      // Users can create their own profile.
-      // Roles are set via custom claims, but the document can be created by the user.
-      allow create: if isOwner(userId);
-
-      // Admins can update any user. Users can only update their own profile, but cannot change their roles.
-      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'teamId']));
-      
+      allow create: if request.auth.uid == userId;
+      allow update: if isAdmin() || (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'teamId']));
       allow delete: if isAdmin();
     }
     
-    // TEAMS
+    // TEAMS, SERVICES, CONTACTS
+    // Only admins can create, update, or delete these core resources.
+    // Any signed-in user can read them.
     match /teams/{teamId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
-
-    // SERVICES
     match /services/{serviceId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /contacts/{contactId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
     // REQUESTS
+    // This is the most critical ruleset.
     match /requests/{requestId} {
       // Any signed-in user can create a request for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
-      // Admins and TechLeads can read all requests (for list queries).
-      // A user can read their own specific request document.
+      // LIST: This is where Custom Claims are essential.
+      // Allows admins or tech leads to list all requests without needing get() calls.
       allow list: if isSignedIn() && (isAdmin() || isTechLead());
+      
+      // GET: A user can get their own request. Admins/TechLeads can get any request.
       allow get: if isSignedIn() && (isAdmin() || isTechLead() || resource.data.userId == request.auth.uid);
 
-      // Admins and TechLeads can update requests.
+      // Admins and TechLeads can update requests (e.g., change status).
       allow update: if isSignedIn() && (isAdmin() || isTechLead());
       
       // Only admins can delete requests.
       allow delete: if isAdmin();
-    }
-    
-    // CONTACTS
-    match /contacts/{contactId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
     }
   }
 }

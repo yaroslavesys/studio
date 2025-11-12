@@ -43,8 +43,11 @@ export default function HomePage() {
     try {
       const result = await signInWithPopup(auth, provider);
       await createUserProfile(result.user);
+      
       // Force refresh the ID token to get the latest custom claims.
+      // This is the critical step to make roles available to security rules.
       await result.user.getIdToken(true);
+
       router.push('/dashboard');
     } catch (error) {
       console.error('Error during sign-in: ', error);
@@ -61,17 +64,16 @@ export default function HomePage() {
     const userDocRef = doc(firestore, 'users', user.uid);
     const userDoc = await getDoc(userDocRef);
 
+    // Create a profile only if it doesn't exist.
+    // Roles (isAdmin, isTechLead) are NOT set here. They are set via Custom Claims.
     if (!userDoc.exists()) {
-      const isAdmin = user.email === 'yaroslav_system.admin@trafficdevils.net';
-      const isTechLead = user.email === 'yaroslav_system.admin@newdevils.net';
-
       await setDoc(userDocRef, {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
         photoURL: user.photoURL,
-        isAdmin: isAdmin,
-        isTechLead: isTechLead && !isAdmin, // A user can't be both
+        isAdmin: false, // Default role
+        isTechLead: false, // Default role
       });
     }
   };

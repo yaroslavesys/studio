@@ -1,64 +1,74 @@
-// Этот скрипт устанавливает Custom Claims (роли) для пользователей Firebase.
-// Запускайте его из терминала: node set-admin-claims.js
-// Или через Google Cloud Shell.
+// This script sets Custom User Claims (roles) for Firebase users.
+// It is designed to be run from an environment that has administrative access
+// to your Firebase project, such as Google Cloud Shell.
 
 const admin = require('firebase-admin');
 
-// ВАЖНО:
-// При запуске в Google Cloud Shell или другой среде Google Cloud,
-// инициализация происходит автоматически без файла ключа.
-// При локальном запуске - убедитесь, что у вас настроены учетные данные
-// через `gcloud auth application-default login` или есть serviceAccountKey.json
+// --- Configuration ---
+// 1. IMPORTANT: Replace these placeholder UIDs with the actual UIDs from your Firebase project.
+// You can find the UID in the Firebase Console under Authentication -> Users.
+const usersToUpdate = [
+  {
+    // The user who should be an administrator
+    uid: 'REPLACE_WITH_ADMIN_UID', 
+    claims: { isAdmin: true, isTechLead: false }
+  },
+  {
+    // The user who should be a tech lead
+    uid: 'REPLACE_WITH_TECH_LEAD_UID', 
+    claims: { isAdmin: false, isTechLead: true }
+  }
+  // Add more users here if needed.
+];
+
+// --- Initialization ---
+// When run in Google Cloud Shell or another Google Cloud environment, initialization
+// works automatically without needing a service account key file.
 try {
   admin.initializeApp();
-  console.log("Инициализация Firebase Admin SDK прошла успешно (через учетные данные среды).");
+  console.log("Initialized Firebase Admin SDK successfully (via Application Default Credentials).");
 } catch (e) {
+  // If running locally, this fallback attempts to use a service account key.
   try {
     const serviceAccount = require('./serviceAccountKey.json');
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount)
     });
-    console.log("Инициализация Firebase Admin SDK прошла успешно (через файл serviceAccountKey.json).");
+    console.log("Initialized Firebase Admin SDK successfully (via serviceAccountKey.json).");
   } catch (e2) {
-      console.error('\x1b[31m%s\x1b[0m', 'Критическая ошибка: Не удалось инициализировать Firebase Admin SDK.');
-      console.error('Причина 1: Не найдена конфигурация в среде Google Cloud.');
-      console.error('Причина 2: Файл serviceAccountKey.json не найден или некорректен.');
+      console.error('\x1b[31m%s\x1b[0m', 'CRITICAL ERROR: Failed to initialize Firebase Admin SDK.');
+      console.error('This script is best run in Google Cloud Shell.');
+      console.error('If running locally, ensure you have run "gcloud auth application-default login" or that a valid serviceAccountKey.json file exists in the root directory.');
       process.exit(1);
   }
 }
 
-
-// 2. Вставьте UID нужных пользователей сюда
-const usersToUpdate = [
-  {
-    uid: 'ЗАМЕНИТЕ_НА_UID_АДМИНИСТРАТОРА', // Пользователь с email yaroslav_system.admin@trafficdevils.net
-    claims: { isAdmin: true, isTechLead: false }
-  },
-  {
-    uid: 'ЗАМЕНИТЕ_НА_UID_ТЕХЛИДА', // Пользователь с email yaroslav_system.admin@newdevils.net
-    claims: { isAdmin: false, isTechLead: true }
-  }
-  // При необходимости добавьте других пользователей
-];
-
-async function setClaims() {
-  if (usersToUpdate.some(u => u.uid.startsWith('ЗАМЕНИТЕ_НА'))) {
-    console.error('\x1b[31m%s\x1b[0m', 'Ошибка: Пожалуйста, замените UID-плейсхолдеры в скрипте set-admin-claims.js на реальные UID пользователей из вашей Firebase Authentication.');
+// --- Main Function ---
+async function setCustomClaims() {
+  // Safety check to prevent running with placeholder UIDs.
+  if (usersToUpdate.some(u => u.uid.startsWith('REPLACE_WITH'))) {
+    console.error('\x1b[31m%s\x1b[0m', 'Error: Please replace the placeholder UIDs in set-admin-claims.js with real UIDs from your Firebase Authentication users.');
     return;
   }
   
-  console.log('Начало установки ролей...');
+  console.log('Starting to set custom claims...');
   
+  let successCount = 0;
+  let errorCount = 0;
+
   for (const user of usersToUpdate) {
     try {
       await admin.auth().setCustomUserClaims(user.uid, user.claims);
-      console.log(`\x1b[32mУспех:\x1b[0m Роли ${JSON.stringify(user.claims)} установлены для пользователя с UID: ${user.uid}`);
+      console.log(`\x1b[32mSUCCESS:\x1b[0m Claims ${JSON.stringify(user.claims)} set for user UID: ${user.uid}`);
+      successCount++;
     } catch (error) {
-      console.error(`\x1b[31mОшибка для UID ${user.uid}:\x1b[0m`, error.message);
+      console.error(`\x1b[31mERROR for UID ${user.uid}:\x1b[0m`, error.message);
+      errorCount++;
     }
   }
 
-  console.log('Установка ролей завершена.');
+  console.log(`\nFinished setting claims. Success: ${successCount}, Failures: ${errorCount}.`);
 }
 
-setClaims();
+// Run the script
+setCustomClaims();
