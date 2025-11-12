@@ -148,8 +148,7 @@ service cloud.firestore {
       // Only admins can delete requests.
       allow delete: if isAdmin();
 
-      // Admins can list all requests.
-      // TechLeads can list requests from their team members.
+      // Admins and techleads can list requests.
       allow list: if isSignedIn() && (isAdmin() || isTechLead());
     }
     
