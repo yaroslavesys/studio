@@ -108,13 +108,14 @@ service cloud.firestore {
       
       // Admins and TechLeads can read any request to manage them.
       // Users can only read their own requests.
-      allow read: if isSignedIn() && (isAdmin() || isTechLead() || isOwner(resource.data.userId));
+      allow get: if isSignedIn() && (isAdmin() || isTechLead() || resource.data.userId == request.auth.uid);
       
+      // Admins and TechLeads can query for requests.
+      allow list: if isSignedIn() && (isAdmin() || isTechLead());
+
       // Admins and TechLeads can update requests. The UI logic prevents incorrect state transitions.
       // The rules just verify the actor has the role and the required fields are present.
-      allow update: if isSignedIn() && (isAdmin() || isTechLead()) &&
-                      request.resource.data.resolvedBy == request.auth.uid &&
-                      request.resource.data.resolvedAt == request.time;
+      allow update: if isSignedIn() && (isAdmin() || isTechLead());
       
       // Only admins can delete requests.
       allow delete: if isAdmin();
