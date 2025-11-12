@@ -51,6 +51,9 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { httpsCallable } from 'firebase/functions';
+import { getFunctions } from 'firebase/functions';
+
 
 // --- Types ---
 interface UserProfile {
@@ -96,29 +99,55 @@ function EditUserForm({
     },
   });
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!firestore) return;
     const userDocRef = doc(firestore, 'users', user.uid);
-    // If teamId is an empty string, convert it to null or delete it before updating
     const updateData: any = { ...values };
-    if (updateData.teamId === '') {
-      updateData.teamId = null; // Or delete updateData.teamId;
+     if (updateData.teamId === 'none' || updateData.teamId === '') {
+      updateData.teamId = null;
     }
 
-    
-      updateDoc(userDocRef, updateData).catch(async () => {
-        const permissionError = new FirestorePermissionError({
-          path: userDocRef.path,
-          operation: 'update',
-          requestResourceData: updateData,
+    try {
+        await updateDoc(userDocRef, updateData);
+        
+        // This is the critical part: Call the cloud function to set custom claims
+        // This makes the UI the source of truth for role assignments.
+        const functions = getFunctions();
+        const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
+        await setCustomClaims({ 
+            uid: user.uid, 
+            claims: { 
+                isAdmin: values.isAdmin, 
+                isTechLead: values.isTechLead 
+            } 
         });
-        errorEmitter.emit('permission-error', permissionError);
-      });
 
-      toast({
-        title: 'User Updated',
-        description: `Successfully updated ${user.displayName}.`,
-      });
-      onFinished();
+        toast({
+            title: 'User Updated',
+            description: `Successfully updated ${user.displayName}. The new roles will apply on their next login.`,
+        });
+
+        onFinished();
+
+    } catch(error: any) {
+        console.error("Error updating user or setting claims:", error);
+        
+        // If it's a Firestore permission error, use our custom handler
+        if (error.code === 'permission-denied') {
+             const permissionError = new FirestorePermissionError({
+                path: userDocRef.path,
+                operation: 'update',
+                requestResourceData: updateData,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        } else {
+             toast({
+                variant: "destructive",
+                title: 'Update Failed',
+                description: error.message || 'Could not update user roles or profile.',
+            });
+        }
+    }
   };
 
   return (
