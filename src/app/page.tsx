@@ -43,6 +43,8 @@ export default function HomePage() {
     try {
       const result = await signInWithPopup(auth, provider);
       await createUserProfile(result.user);
+      // Force refresh the ID token to get the latest custom claims.
+      await result.user.getIdToken(true);
       router.push('/dashboard');
     } catch (error) {
       console.error('Error during sign-in: ', error);
@@ -60,7 +62,6 @@ export default function HomePage() {
     const userDoc = await getDoc(userDocRef);
 
     if (!userDoc.exists()) {
-      // This is the correct logic to assign roles on first sign-up.
       const isAdmin = user.email === 'yaroslav_system.admin@trafficdevils.net';
       const isTechLead = user.email === 'yaroslav_system.admin@newdevils.net';
 

@@ -8,6 +8,7 @@ import {
   Query,
   updateDoc,
   serverTimestamp,
+  FirestoreError,
 } from 'firebase/firestore';
 import { useCollection, useFirestore, useUser } from '@/firebase';
 import {
@@ -122,12 +123,16 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
 
 
 export function RequestsTable({ 
-  requestsQuery, 
+  requests,
+  isLoading,
+  error,
   userProfile, 
   usersMap, 
   servicesMap 
 }: { 
-  requestsQuery: Query | null, 
+  requests: AccessRequest[] | null, 
+  isLoading: boolean,
+  error: Error | FirestoreError | null,
   userProfile?: UserProfile | null,
   usersMap: Map<string, UserProfile>,
   servicesMap: Map<string, string>,
@@ -137,8 +142,6 @@ export function RequestsTable({
   const { toast } = useToast();
   
   const [requestToReject, setRequestToReject] = useState<AccessRequest | null>(null);
-
-  const { data: requests, isLoading, error } = useCollection<AccessRequest>(requestsQuery);
 
   const handleUpdateStatus = async (request: AccessRequest, newStatus: AccessRequest['status']) => {
     if (!firestore || !currentUser) return;

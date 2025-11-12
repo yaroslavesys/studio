@@ -7,6 +7,7 @@ import {
   Query,
   updateDoc,
   serverTimestamp,
+  FirestoreError,
 } from 'firebase/firestore';
 import { useCollection, useFirestore, useUser } from '@/firebase';
 import {
@@ -114,12 +115,16 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
 
 
 export function TechleadRequestsTable({ 
-    requestsQuery, 
+    requests,
+    isLoading,
+    error,
     userProfile,
     usersMap,
     servicesMap,
 }: { 
-    requestsQuery: Query | null, 
+    requests: AccessRequest[] | null, 
+    isLoading: boolean,
+    error: Error | FirestoreError | null,
     userProfile?: UserProfile | null,
     usersMap: Map<string, UserProfile>,
     servicesMap: Map<string, string>,
@@ -129,8 +134,6 @@ export function TechleadRequestsTable({
   const { toast } = useToast();
   
   const [requestToReject, setRequestToReject] = useState<AccessRequest | null>(null);
-
-  const { data: requests, isLoading, error } = useCollection<AccessRequest>(requestsQuery);
 
   const handleApprove = async (request: AccessRequest) => {
     if (!firestore || !currentUser) return;

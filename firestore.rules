@@ -51,9 +51,10 @@ service cloud.firestore {
       // Any signed-in user can create a request for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
-      // Admins can read all requests. Tech leads can read all requests. Users can only read their own requests.
-      // This is now safe for LIST queries because it does not use get() or resource.data.
-      allow read: if isSignedIn() && (isAdmin() || isTechLead() || resource.data.userId == request.auth.uid);
+      // Admins and TechLeads can read all requests (for list queries).
+      // A user can read their own specific request document.
+      allow list: if isSignedIn() && (isAdmin() || isTechLead());
+      allow get: if isSignedIn() && (isAdmin() || isTechLead() || resource.data.userId == request.auth.uid);
 
       // Admins and TechLeads can update requests.
       allow update: if isSignedIn() && (isAdmin() || isTechLead());

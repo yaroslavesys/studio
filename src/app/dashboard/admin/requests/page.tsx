@@ -62,13 +62,22 @@ export default function AdminRequestsPage() {
     if (!firestore || !userProfile?.isAdmin) return null;
     return query(
       collection(firestore, 'requests'), 
-      where('status', 'in', ['approved_by_tech_lead', 'pending']),
       orderBy('requestedAt', 'asc')
     );
   }, [firestore, userProfile]);
 
-  const isLoading = isLoadingProfile || isLoadingServices || isLoadingUsers;
-  const error = profileError || servicesError || usersError;
+  const filteredAdminRequests = useMemo(() => {
+      if (!userProfile?.isAdmin) return [];
+      // client-side filter
+      return adminRequestsQuery ? requests?.filter(req => ['approved_by_tech_lead', 'pending'].includes(req.status)) : [];
+  }, [requests, userProfile, adminRequestsQuery]);
+
+
+  const { data: requests, isLoading: isLoadingRequests, error: requestsError } = useCollection<AccessRequest>(adminRequestsQuery);
+
+
+  const isLoading = isLoadingProfile || isLoadingServices || isLoadingUsers || isLoadingRequests;
+  const error = profileError || servicesError || usersError || requestsError;
 
   if (isLoading) {
     return (
@@ -105,7 +114,9 @@ export default function AdminRequestsPage() {
         </CardHeader>
         <CardContent>
           <RequestsTable 
-            requestsQuery={adminRequestsQuery} 
+            requests={filteredAdminRequests}
+            isLoading={isLoading}
+            error={error}
             userProfile={userProfile}
             usersMap={usersMap}
             servicesMap={servicesMap}

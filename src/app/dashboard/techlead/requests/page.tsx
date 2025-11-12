@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/card';
 import { TechleadRequestsTable } from './techlead-requests-table';
 import { useFirestore, useUser, useMemoFirebase, useCollection, useDoc } from '@/firebase';
-import { collection, query, where, doc, orderBy } from 'firebase/firestore';
+import { collection, query, where, doc, orderBy, FirestoreError } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
@@ -27,6 +27,16 @@ interface UserProfile {
 interface Service {
     id: string;
     name: string;
+}
+
+interface AccessRequest {
+  id: string;
+  userId: string;
+  serviceId: string;
+  status: 'pending' | 'approved_by_tech_lead' | 'completed' | 'rejected';
+  requestedAt: any;
+  notes?: string;
+  resolvedAt?: any;
 }
 
 export default function TechLeadRequestsPage() {
@@ -55,7 +65,7 @@ export default function TechLeadRequestsPage() {
 
   const { data: services, isLoading: isLoadingServices, error: servicesError } = useCollection<Service>(servicesQuery);
 
-  // This query finds all PENDING requests from the members of the tech lead's team.
+  // This query finds all requests from the members of the tech lead's team.
   const teamRequestsQuery = useMemoFirebase(() => {
     if (!firestore || !teamMembers || teamMembers.length === 0) return null;
     const memberIds = teamMembers.map(m => m.uid);
@@ -63,10 +73,17 @@ export default function TechLeadRequestsPage() {
     return query(
       collection(firestore, 'requests'),
       where('userId', 'in', memberIds),
-      where('status', '==', 'pending'),
       orderBy('requestedAt', 'desc')
     );
   }, [firestore, teamMembers]);
+
+  const { data: requests, isLoading: isLoadingRequests, error: requestsError } = useCollection<AccessRequest>(teamRequestsQuery);
+
+  const pendingRequests = useMemo(() => {
+    if (!requests) return [];
+    return requests.filter(req => req.status === 'pending');
+  }, [requests]);
+
 
   const usersMap = useMemo(() => {
     if (!teamMembers) return new Map<string, UserProfile>();
@@ -82,8 +99,8 @@ export default function TechLeadRequestsPage() {
     return new Map(services.map((s) => [s.id, s.name]));
   }, [services]);
   
-  const isLoading = isLoadingProfile || isLoadingMembers || isLoadingServices;
-  const error = profileError || membersError || servicesError;
+  const isLoading = isLoadingProfile || isLoadingMembers || isLoadingServices || isLoadingRequests;
+  const error = profileError || membersError || servicesError || requestsError;
 
   if (isLoading) {
     return (
@@ -130,7 +147,9 @@ export default function TechLeadRequestsPage() {
         </CardHeader>
         <CardContent>
             <TechleadRequestsTable 
-                requestsQuery={teamRequestsQuery} 
+                requests={pendingRequests} 
+                isLoading={isLoading}
+                error={error}
                 userProfile={userProfile} 
                 usersMap={usersMap}
                 servicesMap={servicesMap}
