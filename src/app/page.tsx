@@ -57,7 +57,7 @@ export default function HomePage() {
           description: error.message || "An unexpected error occurred during sign-in.",
         });
       });
-  }, [auth, isLoading, user, router, toast]);
+  }, [auth, isLoading, user, toast]);
 
   const handleSignIn = async () => {
     if (!auth) return;
