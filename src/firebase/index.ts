@@ -2,7 +2,7 @@
 
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 
@@ -37,6 +37,9 @@ export function getSdks(firebaseApp: FirebaseApp) {
   const firestore = getFirestore(firebaseApp);
   const auth = getAuth(firebaseApp);
   const functions = getFunctions(firebaseApp);
+  
+  // Explicitly set persistence to avoid issues with redirects in complex environments
+  setPersistence(auth, browserSessionPersistence);
   
   return {
     firebaseApp,

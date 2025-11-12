@@ -20,55 +20,48 @@ import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore';
 export default function HomePage() {
   const router = useRouter();
   const auth = useAuth();
-  const { user, isLoading } = useUser();
+  const { user, isUserLoading: isLoading } = useUser();
   const { toast } = useToast();
 
-  // Step 2: Check for redirect result on component mount
   useEffect(() => {
-    if (!auth || isLoading) return;
-
-    // If a user is already logged in, redirect to the dashboard.
-    if (user) {
-      router.push('/dashboard');
-      return;
+    if (!auth || isLoading) {
+        return;
+    }
+    
+    // If a user is already logged in, no need to check for redirect, just go to dashboard.
+    if(user) {
+        router.push('/dashboard');
+        return;
     }
 
-    // This handles the redirect back from Google
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
-          // User successfully signed in.
-          await createUserProfile(result.user);
-          await result.user.getIdToken(true); // Refresh token for claims
+          // This is the signed-in user
+          const user = result.user;
+          // Create a user profile if it doesn't exist
+          await createUserProfile(user);
+          // Force token refresh to get custom claims
+          await user.getIdToken(true);
+          // Redirect to the dashboard
           router.push('/dashboard');
         }
-        // If result is null, it means the user just landed on the page
-        // without coming from a redirect.
+        // If result is null, it means we are not coming from a redirect.
+        // We do nothing and just show the login page.
       })
       .catch((error) => {
-        console.error('Error during redirect result processing: ', error);
+        console.error("Authentication error: ", error);
         toast({
-          variant: 'destructive',
-          title: 'Uh oh! Something went wrong.',
-          description: error.message || 'There was a problem with the sign-in process.',
+          variant: "destructive",
+          title: "Sign-in Failed",
+          description: error.message || "An unexpected error occurred during sign-in.",
         });
       });
-  }, [auth, user, isLoading, router, toast]);
+  }, [auth, isLoading, user, router, toast]);
 
-
-  // Step 1: Initiate the redirect when the user clicks the button
   const handleSignIn = async () => {
-    if (!auth) {
-      console.error('Firebase Auth is not initialized.');
-      toast({
-        variant: 'destructive',
-        title: 'Authentication Error',
-        description: 'Firebase is not ready. Please try again in a moment.',
-      });
-      return;
-    }
+    if (!auth) return;
     const provider = new GoogleAuthProvider();
-    // This will redirect the user to the Google sign-in page
     await signInWithRedirect(auth, provider);
   };
 
@@ -88,7 +81,6 @@ export default function HomePage() {
       });
     }
   };
-
 
   if (isLoading || user) {
     return (
