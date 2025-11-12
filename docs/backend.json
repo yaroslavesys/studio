@@ -112,6 +112,14 @@
         "notes": {
             "type": "string",
             "description": "Notes from the resolver."
+        },
+        "userIsAdmin": {
+            "type": "boolean",
+            "description": "Flag to indicate if the requesting user is an administrator."
+        },
+        "userIsTechLead": {
+            "type": "boolean",
+            "description": "Flag to indicate if the requesting user is a tech lead."
         }
       },
       "required": ["userId", "serviceId", "status", "requestedAt"]

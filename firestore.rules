@@ -4,7 +4,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // Helper functions to check roles from the user's document
     function isSignedIn() {
       return request.auth != null;
     }
@@ -12,72 +12,55 @@ service cloud.firestore {
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
-
-    // Returns true if the user's profile in firestore has isAdmin: true
-    function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
-
-    // Returns true if the user's profile in firestore has isTechLead: true
-    function isTechLead() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isTechLead == true;
-    }
     
-    // Returns true if the requesting user is the tech lead of a specific team
-    function isTeamTechLead(teamId) {
-      return isTechLead() && get(/databases/$(database)/documents/teams/$(teamId)).data.techLeadId == request.auth.uid;
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     // USERS
     match /users/{userId} {
-      // Allow any signed-in user to read user profiles. This is necessary for the `get()`
-      // calls in helper functions like `isAdmin()` and `isTechLead()` to work reliably
-      // during list queries on other collections. Write rules remain strict.
+      // Allow any signed-in user to read user profiles. 
+      // This is necessary for the client to function correctly without complex rules.
       allow read: if isSignedIn();
       
       // Users can create their own profile.
-      // The `isAdmin` and `isTechLead` fields must be false unless set by the backend logic on creation.
+      // Roles are set based on email during creation and cannot be self-assigned.
       allow create: if isSignedIn() && isOwner(userId) &&
         (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') || request.resource.data.isAdmin == false) &&
         (request.resource.data.isTechLead == (request.auth.token.email == 'yaroslav_system.admin@newdevils.net') || request.resource.data.isTechLead == false);
 
-      // Users can update their own profile, but they CANNOT make themselves an admin or tech lead.
-      // Admins can update any user profile, including roles and team assignments.
+      // Users can update their own profile, but they CANNOT change their roles.
+      // Admins can update any user profile, including roles.
       allow update: if isSignedIn() && 
-        ((isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin && request.resource.data.isTechLead == resource.data.isTechLead) || isAdmin());
+        ((isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin && request.resource.data.isTechLead == resource.data.isTechLead) || getUserData().isAdmin == true);
       
       // Only admins can delete users.
-      allow delete: if isAdmin();
+      allow delete: if getUserData().isAdmin == true;
     }
     
     // TEAMS
     match /teams/{teamId} {
-      // Admins can read any team. 
-      // TechLeads can ONLY read their own team document.
-      // Any user can read the document of the team they belong to.
-      allow get: if isSignedIn() && (isAdmin() || isTeamTechLead(teamId) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId == teamId);
-      
-      // Admins can list all teams. 
-      // TechLeads can query for their own team, but only if they request exactly one document.
-      allow list: if isSignedIn() && (isAdmin() || (isTechLead() && request.query.limit <= 1));
+      // Any signed-in user can read team data.
+      allow read: if isSignedIn();
       
       // Only Admins can create, update, or delete teams.
-      allow create, update, delete: if isAdmin();
+      allow write: if getUserData().isAdmin == true;
     }
 
     // SERVICES
     // Any signed-in user can read the list of available services.
-    // This allows the client to show what can be requested.
     match /services/{serviceId} {
       allow read: if isSignedIn();
       // Only admins can create, update, or delete services.
-      allow write: if isAdmin();
+      allow write: if getUserData().isAdmin == true;
     }
 
     // REQUESTS
-    // Admins and TechLeads can list requests.
+    // Rules for the entire collection (for list queries)
     match /requests/{document=**} {
-      allow list: if isAdmin() || isTechLead();
+      // Admins and TechLeads can list requests.
+      // This rule is simple and relies on data in the user's profile.
+       allow list: if getUserData().isAdmin == true || getUserData().isTechLead == true;
     }
     
     // Rule for individual document access (get, create, update, delete)
@@ -90,14 +73,13 @@ service cloud.firestore {
       
       // Admins and TechLeads can read any request to manage them.
       // Users can only read their own requests.
-      allow get: if isSignedIn() && (isAdmin() || isTechLead() || resource.data.userId == request.auth.uid);
+      allow get: if (getUserData().isAdmin == true || getUserData().isTechLead == true || resource.data.userId == request.auth.uid);
 
-      // Admins and TechLeads can update requests. The UI logic prevents incorrect state transitions.
-      // The rules just verify the actor has the role and the required fields are present.
-      allow update: if isSignedIn() && (isAdmin() || isTechLead());
+      // Admins and TechLeads can update requests.
+      allow update: if (getUserData().isAdmin == true || getUserData().isTechLead == true);
       
       // Only admins can delete requests.
-      allow delete: if isAdmin();
+      allow delete: if getUserData().isAdmin == true;
     }
     
     // CONTACTS
@@ -105,7 +87,7 @@ service cloud.firestore {
     match /contacts/{contactId} {
       allow read: if isSignedIn();
       // Only admins can create, update, or delete contact links.
-      allow write: if isAdmin();
+      allow write: if getUserData().isAdmin == true;
     }
   }
 }

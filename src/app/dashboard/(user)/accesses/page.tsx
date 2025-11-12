@@ -22,6 +22,7 @@ interface UserProfile {
     uid: string;
     teamId?: string;
     isAdmin?: boolean;
+    isTechLead?: boolean;
 }
 
 interface Team {
@@ -95,7 +96,7 @@ export default function AccessesPage() {
   const { data: userRequestsData } = useCollection<AccessRequest>(userRequestsQuery);
   
   const handleRequestAccess = async (service: Service) => {
-    if (!user || !firestore) return;
+    if (!user || !firestore || !profile) return;
 
     const existingRequest = userRequestsData?.find(
         (req) => req.serviceId === service.id && (req.status === 'pending' || req.status === 'approved_by_tech_lead' || req.status === 'completed')
@@ -116,6 +117,8 @@ export default function AccessesPage() {
         serviceId: service.id,
         status: 'pending' as const,
         requestedAt: serverTimestamp(),
+        userIsAdmin: profile.isAdmin || false,
+        userIsTechLead: profile.isTechLead || false,
     };
     addDoc(requestsCollection, newRequest)
         .then(() => {
