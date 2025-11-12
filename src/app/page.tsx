@@ -71,6 +71,7 @@ export default function HomePage() {
     }
   };
 
+
   if (isLoading || user) {
     // Show a loading state or nothing while checking auth state or redirecting
     return (
