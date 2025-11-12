@@ -77,12 +77,10 @@ export default function AccessesPage() {
   const availableServicesQuery = useMemoFirebase(() => {
     if (!firestore || isLoadingProfile) return null;
     
-    // Admins can see all services
     if (profile?.isAdmin) {
         return collection(firestore, 'services');
     }
 
-    // Regular users see services based on their team
     if (!team?.availableServiceIds || team.availableServiceIds.length === 0) return null;
     return query(collection(firestore, 'services'), where('__name__', 'in', team.availableServiceIds));
   }, [firestore, profile, team, isLoadingProfile]);
@@ -117,8 +115,8 @@ export default function AccessesPage() {
         serviceId: service.id,
         status: 'pending' as const,
         requestedAt: serverTimestamp(),
-        userIsAdmin: profile.isAdmin || false,
-        userIsTechLead: profile.isTechLead || false,
+        userIsAdmin: profile.isAdmin ?? false,
+        userIsTechLead: profile.isTechLead ?? false,
     };
     addDoc(requestsCollection, newRequest)
         .then(() => {

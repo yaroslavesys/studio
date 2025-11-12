@@ -122,7 +122,7 @@
             "description": "Flag to indicate if the requesting user is a tech lead."
         }
       },
-      "required": ["userId", "serviceId", "status", "requestedAt"]
+      "required": ["userId", "serviceId", "status", "requestedAt", "userIsAdmin", "userIsTechLead"]
     },
     "Contact": {
       "title": "Contact",

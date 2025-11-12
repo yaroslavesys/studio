@@ -4,7 +4,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions to check roles from the user's document
     function isSignedIn() {
       return request.auth != null;
     }
@@ -19,68 +18,59 @@ service cloud.firestore {
 
     // USERS
     match /users/{userId} {
-      // Allow any signed-in user to read user profiles. 
-      // This is necessary for the client to function correctly without complex rules.
       allow read: if isSignedIn();
       
-      // Users can create their own profile.
-      // Roles are set based on email during creation and cannot be self-assigned.
-       allow create: if isSignedIn() && isOwner(userId) &&
+      allow create: if isSignedIn() && isOwner(userId) &&
         (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') || request.resource.data.isAdmin == false) &&
         (request.resource.data.isTechLead == (request.auth.token.email == 'yaroslav_system.admin@newdevils.net') || request.resource.data.isTechLead == false);
 
-
-      // Users can update their own profile, but they CANNOT change their roles.
-      // Admins can update any user profile, including roles.
       allow update: if isSignedIn() && 
         ((isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin && request.resource.data.isTechLead == resource.data.isTechLead) || getUserData().isAdmin == true);
       
-      // Only admins can delete users.
       allow delete: if getUserData().isAdmin == true;
     }
     
     // TEAMS
     match /teams/{teamId} {
-      // Any signed-in user can read team data.
       allow read: if isSignedIn();
-      
-      // Only Admins can create, update, or delete teams.
       allow write: if getUserData().isAdmin == true;
     }
 
     // SERVICES
-    // Any signed-in user can read the list of available services.
     match /services/{serviceId} {
       allow read: if isSignedIn();
-      // Only admins can create, update, or delete services.
       allow write: if getUserData().isAdmin == true;
     }
 
     // REQUESTS
     match /requests/{requestId} {
-      // Users can create their own requests.
-      // The request must be for the user themselves and start in 'pending' state.
+      // Users can create their own requests, embedding their roles at creation time.
       allow create: if isSignedIn() && 
                       request.resource.data.userId == request.auth.uid &&
-                      request.resource.data.status == 'pending';
+                      request.resource.data.status == 'pending' &&
+                      // Ensure the embedded roles match the user's actual roles from their profile
+                      request.resource.data.userIsAdmin == getUserData().isAdmin &&
+                      request.resource.data.userIsTechLead == getUserData().isTechLead;
       
-      // Admins and TechLeads can read any request.
+      // Admins and TechLeads can read any request based on roles at time of request.
       // Users can only read their own requests.
       allow read: if isSignedIn() && 
-                    (getUserData().isAdmin == true || getUserData().isTechLead == true || resource.data.userId == request.auth.uid);
+                    (resource.data.userId == request.auth.uid || 
+                     (getUserData().isAdmin == true && resource.data.userIsAdmin == true) || 
+                     (getUserData().isTechLead == true && resource.data.userIsTechLead == true) ||
+                     getUserData().isAdmin == true // Admins can read all
+                    );
 
       // Admins and TechLeads can update requests.
-      allow update: if (getUserData().isAdmin == true || getUserData().isTechLead == true);
+      allow update: if isSignedIn() && (getUserData().isAdmin == true || getUserData().isTechLead == true);
       
       // Only admins can delete requests.
       allow delete: if getUserData().isAdmin == true;
     }
     
     // CONTACTS
-    // Any signed-in user can read the list of contact links.
     match /contacts/{contactId} {
       allow read: if isSignedIn();
-      // Only admins can create, update, or delete contact links.
       allow write: if getUserData().isAdmin == true;
     }
   }
