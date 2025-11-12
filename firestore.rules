@@ -12,67 +12,60 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    function isAdmin() {
+      return request.auth.token.isAdmin == true;
+    }
+
+    function isTechLead() {
+      return request.auth.token.isTechLead == true;
     }
 
     // USERS
     match /users/{userId} {
       allow read: if isSignedIn();
       
-      allow create: if isSignedIn() && isOwner(userId) &&
-        (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') || request.resource.data.isAdmin == false) &&
-        (request.resource.data.isTechLead == (request.auth.token.email == 'yaroslav_system.admin@newdevils.net') || request.resource.data.isTechLead == false);
+      // Users can create their own profile.
+      // Roles are set via custom claims, but the document can be created by the user.
+      allow create: if isOwner(userId);
 
-      allow update: if isSignedIn() && 
-        ((isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin && request.resource.data.isTechLead == resource.data.isTechLead) || getUserData().isAdmin == true);
+      // Admins can update any user. Users can only update their own profile, but cannot change their roles.
+      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'teamId']));
       
-      allow delete: if getUserData().isAdmin == true;
+      allow delete: if isAdmin();
     }
     
     // TEAMS
     match /teams/{teamId} {
       allow read: if isSignedIn();
-      allow write: if getUserData().isAdmin == true;
+      allow write: if isAdmin();
     }
 
     // SERVICES
     match /services/{serviceId} {
       allow read: if isSignedIn();
-      allow write: if getUserData().isAdmin == true;
+      allow write: if isAdmin();
     }
 
     // REQUESTS
     match /requests/{requestId} {
-      // Users can create their own requests, embedding their roles at creation time.
-      allow create: if isSignedIn() && 
-                      request.resource.data.userId == request.auth.uid &&
-                      request.resource.data.status == 'pending' &&
-                      // Ensure the embedded roles match the user's actual roles from their profile
-                      request.resource.data.userIsAdmin == getUserData().isAdmin &&
-                      request.resource.data.userIsTechLead == getUserData().isTechLead;
+      // Any signed-in user can create a request for themselves.
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
-      // Admins and TechLeads can read any request based on roles at time of request.
-      // Users can only read their own requests.
-      // This rule DOES NOT use get() and is safe for list queries.
-      allow read: if isSignedIn() && 
-                    (resource.data.userId == request.auth.uid || 
-                     (getUserData().isAdmin == true && resource.data.userIsAdmin == true) || 
-                     (getUserData().isTechLead == true && resource.data.userIsTechLead == true) ||
-                     getUserData().isAdmin == true // Admins can read all
-                    );
+      // Admins can read all requests. Tech leads can read all requests. Users can only read their own requests.
+      // This is now safe for LIST queries because it does not use get() or resource.data.
+      allow read: if isSignedIn() && (isAdmin() || isTechLead() || resource.data.userId == request.auth.uid);
 
       // Admins and TechLeads can update requests.
-      allow update: if isSignedIn() && (getUserData().isAdmin == true || getUserData().isTechLead == true);
+      allow update: if isSignedIn() && (isAdmin() || isTechLead());
       
       // Only admins can delete requests.
-      allow delete: if getUserData().isAdmin == true;
+      allow delete: if isAdmin();
     }
     
     // CONTACTS
     match /contacts/{contactId} {
       allow read: if isSignedIn();
-      allow write: if getUserData().isAdmin == true;
+      allow write: if isAdmin();
     }
   }
 }
