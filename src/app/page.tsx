@@ -60,13 +60,17 @@ export default function HomePage() {
     const userDoc = await getDoc(userDocRef);
 
     if (!userDoc.exists()) {
+      // This is the correct logic to assign roles on first sign-up.
+      const isAdmin = user.email === 'yaroslav_system.admin@trafficdevils.net';
+      const isTechLead = user.email === 'yaroslav_system.admin@newdevils.net';
+
       await setDoc(userDocRef, {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
         photoURL: user.photoURL,
-        isAdmin: user.email === 'yaroslav_system.admin@trafficdevils.net',
-        isTechLead: user.email === 'yaroslav_system.admin@newdevils.net',
+        isAdmin: isAdmin,
+        isTechLead: isTechLead && !isAdmin, // A user can't be both
       });
     }
   };

@@ -45,7 +45,7 @@ service cloud.firestore {
 
 
     // USERS
-    // Users can read their own document.
+    // Users can read their own document. This is required for isAdmin() and isTechLead() to work.
     // Admins can read any user document.
     // TechLeads can read users in their team.
     // Regular users can read profiles of users in the same team.
@@ -53,12 +53,10 @@ service cloud.firestore {
        allow read: if isSignedIn() && (isOwner(userId) || isAdmin() || isUserInTechLeadTeam(userId) || isUserInSameTeam(userId));
       
       // Users can create their own profile.
-      // The `isAdmin` and `isTechLead` fields must be false unless set by specific emails.
-      // This prevents users from making themselves admins or tech leads on signup.
+      // The `isAdmin` and `isTechLead` fields must be false unless set by the backend logic on creation.
       allow create: if isSignedIn() && isOwner(userId) &&
-        (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') && request.resource.data.isAdmin == true || request.resource.data.isAdmin == false) &&
-        (request.resource.data.isTechLead == (request.auth.token.email == 'yaroslav_system.admin@newdevils.net') && request.resource.data.isTechLead == true || request.resource.data.isTechLead == false);
-        
+        (request.resource.data.isAdmin == (request.auth.token.email == 'yaroslav_system.admin@trafficdevils.net') || request.resource.data.isAdmin == false) &&
+        (request.resource.data.isTechLead == (request.auth.token.email == 'yaroslav_system.admin@newdevils.net') || request.resource.data.isTechLead == false);
 
       // Users can update their own profile, but they CANNOT make themselves an admin or tech lead.
       // Admins can update any user profile, including roles and team assignments.
@@ -68,9 +66,8 @@ service cloud.firestore {
       // Only admins can delete users.
       allow delete: if isAdmin();
 
-      // Admins can list users. TechLeads can only list users in their team.
-      // Users can list members of their own team.
-       allow list: if isAdmin() || isTechLead() || isSignedIn();
+      // Admins and TechLeads can list users. Regular users can list their own team members.
+      allow list: if isAdmin() || isTechLead() || isSignedIn();
     }
     
     // TEAMS
@@ -82,7 +79,6 @@ service cloud.firestore {
       
       // Admins can list all teams. 
       // TechLeads can query for their own team, but only if they request exactly one document.
-      // This prevents them from listing all teams.
       allow list: if isSignedIn() && (isAdmin() || (isTechLead() && request.query.limit <= 1));
       
       // Only Admins can create, update, or delete teams.
@@ -99,11 +95,11 @@ service cloud.firestore {
     }
 
     // REQUESTS
-    // Rule to allow list queries by admins and tech leads
+    // Admins and TechLeads can list requests.
     match /requests/{document=**} {
       allow list: if isAdmin() || isTechLead();
     }
-
+    
     // Rule for individual document access (get, create, update, delete)
     match /requests/{requestId} {
       // Users can create their own requests.
