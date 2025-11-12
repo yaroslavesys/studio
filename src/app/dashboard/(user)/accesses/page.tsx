@@ -61,7 +61,7 @@ export default function AccessesPage() {
         if (userDoc.exists()) {
             const userProfile = { uid: user.uid, ...userDoc.data() } as UserProfile;
             setProfile(userProfile);
-            if(userProfile.teamId && !userProfile.isAdmin) {
+            if(userProfile.teamId) {
                 const teamDocRef = doc(firestore, 'teams', userProfile.teamId);
                 const teamDoc = await getDoc(teamDocRef);
                 if (teamDoc.exists()) {
