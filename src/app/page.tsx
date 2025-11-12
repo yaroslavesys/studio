@@ -50,12 +50,12 @@ export default function HomePage() {
       await result.user.getIdToken(true);
 
       router.push('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during sign-in: ', error);
       toast({
         variant: 'destructive',
         title: 'Uh oh! Something went wrong.',
-        description: 'There was a problem with the sign-in process.',
+        description: error.message || 'There was a problem with the sign-in process.',
       });
     }
   };
