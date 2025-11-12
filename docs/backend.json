@@ -141,6 +141,36 @@
         }
       },
       "required": ["name", "url"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Represents a notification for a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user this notification is for."
+        },
+        "message": {
+          "type": "string",
+          "description": "The content of the notification."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "A URL to navigate to when the notification is clicked."
+        },
+        "isRead": {
+          "type": "boolean",
+          "description": "Whether the user has read the notification."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the notification was created."
+        }
+      },
+      "required": ["userId", "message", "isRead", "createdAt"]
     }
   },
   "auth": {
@@ -178,6 +208,12 @@
         "$ref": "#/entities/Contact"
       },
       "description": "Stores a list of managed contact links for users."
+    },
+    "/notifications/{notificationId}": {
+      "schema": {
+        "$ref": "#/entities/Notification"
+      },
+      "description": "Stores notifications for users."
     }
   }
 }

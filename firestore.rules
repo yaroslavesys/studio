@@ -50,17 +50,14 @@ service cloud.firestore {
     match /requests/{requestId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
-      // Admins can see all requests
-      allow list: if isAdmin();
-
       function isUserOnTechLeadsTeam(userId) {
         let techLeadTeamId = getUserData(request.auth.uid).teamId;
         let userTeamId = getUserData(userId).teamId;
         return isTechLead() && techLeadTeamId != null && techLeadTeamId == userTeamId;
       }
       
-      // Tech Leads can list requests for their team members
-      // A user can list their own requests
+      // Admins can see all requests
+      // Tech Leads and Users can see requests related to them/their team.
       allow read: if isSignedIn() && (
         resource.data.userId == request.auth.uid || 
         isAdmin() ||
@@ -70,6 +67,13 @@ service cloud.firestore {
       allow update: if isSignedIn() && (isAdmin() || isUserOnTechLeadsTeam(resource.data.userId));
       
       allow delete: if isAdmin();
+    }
+
+    // NOTIFICATIONS
+    match /notifications/{notificationId} {
+      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn(); // Created by cloud functions
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
   }
 }
