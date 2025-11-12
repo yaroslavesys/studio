@@ -360,10 +360,28 @@ export function TeamsTable() {
 
 
   const handleDelete = async (teamToDelete: Team) => {
-    if (!firestore) return;
+    if (!firestore || !teams) return;
+    const batch = writeBatch(firestore);
+
     try {
+      // 1. Delete the team
       const teamDocRef = doc(firestore, 'teams', teamToDelete.id);
-      await deleteDoc(teamDocRef).catch((e) => {
+      batch.delete(teamDocRef);
+
+      // 2. Check if the tech lead is a lead of any other team
+      const techLeadId = teamToDelete.techLeadId;
+      const otherTeamsLed = teams.filter(
+        (t) => t.techLeadId === techLeadId && t.id !== teamToDelete.id
+      );
+
+      // 3. If they lead no other teams, demote them from tech lead status
+      if (otherTeamsLed.length === 0) {
+        const userDocRef = doc(firestore, 'users', techLeadId);
+        batch.update(userDocRef, { isTechLead: false });
+      }
+      
+      // 4. Commit the batch
+      await batch.commit().catch((e) => {
         const permissionError = new FirestorePermissionError({
           path: teamDocRef.path,
           operation: 'delete',
@@ -371,6 +389,7 @@ export function TeamsTable() {
         errorEmitter.emit('permission-error', permissionError);
         throw permissionError;
       });
+
       toast({ title: 'Team Deleted', description: `The ${teamToDelete.name} team has been deleted.` });
     } catch (error: any) {
       console.error('Error deleting team: ', error);
