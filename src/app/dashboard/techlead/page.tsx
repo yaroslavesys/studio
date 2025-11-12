@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useMemoFirebase, useCollection } from '@/firebase';
 import {
   collection,
   query,
@@ -22,8 +22,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 interface Team {
   id: string;
@@ -43,74 +41,54 @@ export default function TechLeadDashboardPage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [team, setTeam] = useState<Team | null>(null);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || !firestore) return;
 
-    const fetchData = async () => {
+    const fetchTeam = async () => {
       setIsLoading(true);
       setError(null);
       
       try {
-        // 1. Find the team for the current tech lead
         const teamsRef = collection(firestore, 'teams');
-        // The query now includes limit(1) to comply with security rules
         const teamQuery = query(teamsRef, where('techLeadId', '==', user.uid), limit(1));
-        const teamSnapshot = await getDocs(teamQuery).catch((e) => {
-            const permissionError = new FirestorePermissionError({
-              path: (teamsRef as CollectionReference).path,
-              operation: 'list',
-            });
-            errorEmitter.emit('permission-error', permissionError);
-            throw permissionError;
-        });
+        const teamSnapshot = await getDocs(teamQuery);
 
         if (teamSnapshot.empty) {
           setError('You are not assigned to any team as a tech lead.');
-          setIsLoading(false);
-          return;
+          setTeam(null);
+        } else {
+          const foundTeam = {
+            id: teamSnapshot.docs[0].id,
+            ...teamSnapshot.docs[0].data(),
+          } as Team;
+          setTeam(foundTeam);
         }
-
-        const foundTeam = {
-          id: teamSnapshot.docs[0].id,
-          ...teamSnapshot.docs[0].data(),
-        } as Team;
-        setTeam(foundTeam);
-
-        // 2. Find all users in that team
-        const usersRef = collection(firestore, 'users');
-        const membersQuery = query(
-          usersRef,
-          where('teamId', '==', foundTeam.id)
-        );
-        const membersSnapshot = await getDocs(membersQuery).catch((e) => {
-            const permissionError = new FirestorePermissionError({
-              path: (usersRef as CollectionReference).path,
-              operation: 'list',
-            });
-            errorEmitter.emit('permission-error', permissionError);
-            throw permissionError;
-        });
-
-        const members = membersSnapshot.docs.map(
-          (doc) => ({ ...doc.data(), uid: doc.id } as TeamMember)
-        );
-        setTeamMembers(members);
       } catch (e: any) {
-        console.error(e); // This will now log the detailed FirestorePermissionError
-        setError(e.message || 'An error occurred while fetching data.');
+        console.error(e);
+        setError(e.message || 'An error occurred while fetching your team data.');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
+    fetchTeam();
   }, [user, firestore]);
 
-  if (isLoading) {
+  const teamMembersQuery = useMemoFirebase(() => {
+    if (!firestore || !team) return null;
+    return query(collection(firestore, 'users'), where('teamId', '==', team.id));
+  }, [firestore, team]);
+
+  const { data: teamMembers, isLoading: isLoadingMembers, error: membersError } = useCollection<TeamMember>(teamMembersQuery);
+
+  const finalIsLoading = isLoading || isLoadingMembers;
+  const finalError = error || membersError?.message;
+
+
+  if (finalIsLoading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-24 w-full" />
@@ -123,12 +101,22 @@ export default function TechLeadDashboardPage() {
     );
   }
 
-  if (error) {
+  if (finalError) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
+        <AlertDescription>{finalError}</AlertDescription>
+      </Alert>
+    );
+  }
+  
+  if(!team) {
+     return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>No Team Assigned</AlertTitle>
+        <AlertDescription>You are not assigned to a team as a Tech Lead.</AlertDescription>
       </Alert>
     );
   }
@@ -148,7 +136,7 @@ export default function TechLeadDashboardPage() {
         <h2 className="mb-4 text-2xl font-semibold tracking-tight">
           Team Members
         </h2>
-        {teamMembers.length > 0 ? (
+        {teamMembers && teamMembers.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {teamMembers.map((member) => (
               <Card key={member.uid}>

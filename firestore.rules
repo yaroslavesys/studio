@@ -18,15 +18,39 @@ service cloud.firestore {
       return request.auth.token.isTechLead == true;
     }
 
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // A user can see their own profile, or an admin/tech lead can see any profile in their team.
+    function canReadProfile(userId) {
+      // Is the user trying to read their own profile?
+      if (isOwner(userId)) {
+        return true;
+      }
+      // Is the user an admin?
+      if (isAdmin()) {
+        return true;
+      }
+      // Is the user a tech lead?
+      if (isTechLead()) {
+        // A tech lead can read the profiles of users on their team.
+        // resource.data refers to the document being read (the user's profile).
+        return resource.data.teamId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId;
+      }
+      return false;
+    }
+    
     // USERS
-    // Users can read any profile.
+    // Users can read any profile for now (simplified rule).
+    // A better rule would be: allow read: if canReadProfile(userId);
     // Users can create their own profile upon signing up.
     // Users can update their own non-critical info (displayName, photoURL, teamId).
     // Admins can update any user profile, including roles.
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if request.auth.uid == userId;
-      allow update: if isAdmin() || (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'teamId']));
+      allow create: if isOwner(userId);
+      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'teamId']));
       allow delete: if isAdmin();
     }
     
@@ -52,9 +76,8 @@ service cloud.firestore {
       // Any signed-in user can create a request for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
-      // LIST: This is where Custom Claims are essential.
-      // Allows admins or tech leads to list all requests without needing get() calls.
-      allow list: if isSignedIn() && (isAdmin() || isTechLead());
+      // LIST: Only Admins can list all requests. Tech Leads cannot.
+      allow list: if isAdmin();
       
       // GET: A user can get their own request. Admins/TechLeads can get any request.
       allow get: if isSignedIn() && (isAdmin() || isTechLead() || resource.data.userId == request.auth.uid);
