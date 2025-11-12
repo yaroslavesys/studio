@@ -8,30 +8,23 @@ service cloud.firestore {
       return request.auth != null;
     }
     
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
     function isAdmin() {
-      // Check for admin role in the custom claims of the auth token.
       return request.auth.token.isAdmin == true;
     }
 
     function isTechLead() {
-      // Check for tech lead role in the custom claims of the auth token.
       return request.auth.token.isTechLead == true;
     }
-
+    
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
 
-    // A user can see their own profile, or an admin/tech lead can see any profile.
-    function canReadProfile(userId) {
-      return isOwner(userId) || isAdmin() || isTechLead();
-    }
-    
     // USERS
-    // Any signed-in user can read any profile for simplicity.
-    // Users can create their own profile.
-    // Users can update their own non-critical info.
-    // Admins can update any user profile.
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isOwner(userId);
@@ -40,8 +33,6 @@ service cloud.firestore {
     }
     
     // TEAMS, SERVICES, CONTACTS
-    // Only admins can create, update, or delete these core resources.
-    // Any signed-in user can read them.
     match /teams/{teamId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -56,32 +47,29 @@ service cloud.firestore {
     }
 
     // REQUESTS
-    // This is the most critical ruleset.
     match /requests/{requestId} {
-      // Any signed-in user can create a request for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
-      // LIST: Only Admins can list all requests. Tech Leads cannot.
-      allow list: if isAdmin();
-      
-      // GET: A user can get their own request. An admin can get any request.
-      // A tech lead can get any request that belongs to a member of their team.
+      // LIST: Admins can list all. TechLeads can list requests for their team members.
+      allow list: if isAdmin() || 
+                  (isTechLead() && getUserData(request.auth.uid).teamId == getUserData(request.query.filters[0].value[0]).teamId);
+
+      // GET: A user can get their own request. An admin can get any. A tech lead can get requests from their team.
       function isUserOnTechLeadsTeam(userId) {
-        let techLeadTeamId = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId;
-        let userTeamId = get(/databases/$(database)/documents/users/$(userId)).data.teamId;
+        let techLeadTeamId = getUserData(request.auth.uid).teamId;
+        let userTeamId = getUserData(userId).teamId;
         return techLeadTeamId != null && techLeadTeamId == userTeamId;
       }
-      
       allow get: if isSignedIn() && (
         resource.data.userId == request.auth.uid || 
         isAdmin() ||
         (isTechLead() && isUserOnTechLeadsTeam(resource.data.userId))
       );
 
-      // Admins and TechLeads can update requests (e.g., change status).
+      // UPDATE: Admins and TechLeads can update requests for their team.
       allow update: if isSignedIn() && (isAdmin() || (isTechLead() && isUserOnTechLeadsTeam(resource.data.userId)));
       
-      // Only admins can delete requests.
+      // DELETE: Only admins can delete requests.
       allow delete: if isAdmin();
     }
   }

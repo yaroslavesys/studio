@@ -248,7 +248,7 @@ export function TechleadRequestsTable({
         </Table>
       </div>
 
-       <Dialog open={!!requestToReject} onOpenChange={(open) => !open && setRequestToReject(null)}>
+       <Dialog open={!!requestToReject} onOpenChange={(open) => {if (!open) setRequestToReject(null)}}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject Access Request</DialogTitle>
