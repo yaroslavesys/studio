@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/card';
 import { RequestsTable } from './requests-table';
 import { useFirestore, useUser, useDoc, useMemoFirebase, useCollection } from '@/firebase';
-import { collection, query, orderBy, doc, where } from 'firebase/firestore';
+import { collection, query, orderBy, doc, where, FirestoreError } from 'firebase/firestore';
 import { useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -23,7 +23,19 @@ interface UserProfile {
   displayName: string;
   email: string;
   photoURL?: string;
+  teamId?: string;
 }
+
+interface AccessRequest {
+  id: string;
+  userId: string;
+  serviceId: string;
+  status: 'pending' | 'approved_by_tech_lead' | 'completed' | 'rejected';
+  requestedAt: any;
+  notes?: string;
+  resolvedAt?: any;
+}
+
 
 interface Service {
     id: string;
@@ -51,14 +63,7 @@ export default function AdminRequestsPage() {
     return collection(firestore, 'users');
   }, [firestore]);
 
-  const { data: services, isLoading: isLoadingServices, error: servicesError } = useCollection<Service>(servicesQuery);
-  const { data: users, isLoading: isLoadingUsers, error: usersError } = useCollection<UserProfile>(usersQuery);
-
-  const servicesMap = useMemo(() => services ? new Map(services.map(s => [s.id, s.name])) : new Map(), [services]);
-  const usersMap = useMemo(() => users ? new Map(users.map(u => [u.uid, u])) : new Map(), [users]);
-
-  // Admins see requests that are either pending their final approval or can be fast-tracked
-  const adminRequestsQuery = useMemoFirebase(() => {
+  const requestsQuery = useMemoFirebase(() => {
     if (!firestore || !userProfile?.isAdmin) return null;
     return query(
       collection(firestore, 'requests'), 
@@ -66,15 +71,19 @@ export default function AdminRequestsPage() {
     );
   }, [firestore, userProfile]);
 
+  const { data: requests, isLoading: isLoadingRequests, error: requestsError } = useCollection<AccessRequest>(requestsQuery);
+  const { data: services, isLoading: isLoadingServices, error: servicesError } = useCollection<Service>(servicesQuery);
+  const { data: users, isLoading: isLoadingUsers, error: usersError } = useCollection<UserProfile>(usersQuery);
+
   const filteredAdminRequests = useMemo(() => {
-      if (!userProfile?.isAdmin) return [];
+      if (!userProfile?.isAdmin || !requests) return [];
       // client-side filter
-      return adminRequestsQuery ? requests?.filter(req => ['approved_by_tech_lead', 'pending'].includes(req.status)) : [];
-  }, [requests, userProfile, adminRequestsQuery]);
+      return requests.filter(req => ['approved_by_tech_lead', 'pending'].includes(req.status));
+  }, [requests, userProfile]);
 
 
-  const { data: requests, isLoading: isLoadingRequests, error: requestsError } = useCollection<AccessRequest>(adminRequestsQuery);
-
+  const servicesMap = useMemo(() => services ? new Map(services.map(s => [s.id, s.name])) : new Map(), [services]);
+  const usersMap = useMemo(() => users ? new Map(users.map(u => [u.uid, u])) : new Map(), [users]);
 
   const isLoading = isLoadingProfile || isLoadingServices || isLoadingUsers || isLoadingRequests;
   const error = profileError || servicesError || usersError || requestsError;
@@ -126,3 +135,4 @@ export default function AdminRequestsPage() {
     </div>
   );
 }
+

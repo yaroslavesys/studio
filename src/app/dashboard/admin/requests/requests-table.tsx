@@ -89,7 +89,7 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
         };
 
         try {
-            await updateDoc(requestDocRef, updateData)
+            updateDoc(requestDocRef, updateData)
             .catch((e) => {
                 const permissionError = new FirestorePermissionError({
                     path: requestDocRef.path,
@@ -143,7 +143,7 @@ export function RequestsTable({
   
   const [requestToReject, setRequestToReject] = useState<AccessRequest | null>(null);
 
-  const handleUpdateStatus = async (request: AccessRequest, newStatus: AccessRequest['status']) => {
+  const handleUpdateStatus = (request: AccessRequest, newStatus: AccessRequest['status']) => {
     if (!firestore || !currentUser) return;
     const requestDocRef = doc(firestore, 'requests', request.id);
     
@@ -161,21 +161,17 @@ export function RequestsTable({
       toastTitle = 'Request Approved';
     }
 
-    try {
-        await updateDoc(requestDocRef, updateData)
-         .catch((e) => {
-            const permissionError = new FirestorePermissionError({
-                path: requestDocRef.path,
-                operation: 'update',
-                requestResourceData: updateData,
-            });
-            errorEmitter.emit('permission-error', permissionError);
-            throw permissionError;
+    updateDoc(requestDocRef, updateData)
+     .catch((e) => {
+        const permissionError = new FirestorePermissionError({
+            path: requestDocRef.path,
+            operation: 'update',
+            requestResourceData: updateData,
         });
-        toast({ title: toastTitle });
-    } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Action Failed', description: error.message });
-    }
+        errorEmitter.emit('permission-error', permissionError);
+        toast({ variant: 'destructive', title: 'Action Failed', description: e.message });
+    });
+    toast({ title: toastTitle });
   };
 
   const getStatusBadge = (status: AccessRequest['status']) => {

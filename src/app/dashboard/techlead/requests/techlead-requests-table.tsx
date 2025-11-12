@@ -1,15 +1,14 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
   doc,
-  Query,
   updateDoc,
   serverTimestamp,
   FirestoreError,
 } from 'firebase/firestore';
-import { useCollection, useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -50,7 +49,7 @@ interface AccessRequest {
   id: string;
   userId: string;
   serviceId: string;
-  status: 'pending';
+  status: 'pending' | 'approved_by_tech_lead' | 'completed' | 'rejected';
   requestedAt: any;
   notes?: string;
 }
@@ -80,22 +79,18 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
             notes: notes || 'No notes provided.',
         };
 
-        try {
-            await updateDoc(requestDocRef, updateData)
-            .catch((e) => {
-                const permissionError = new FirestorePermissionError({
-                    path: requestDocRef.path,
-                    operation: 'update',
-                    requestResourceData: updateData,
-                });
-                errorEmitter.emit('permission-error', permissionError);
-                throw permissionError;
+        updateDoc(requestDocRef, updateData)
+        .catch((e) => {
+            const permissionError = new FirestorePermissionError({
+                path: requestDocRef.path,
+                operation: 'update',
+                requestResourceData: updateData,
             });
-            toast({ title: 'Request Rejected' });
-            onFinished();
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Action Failed', description: error.message });
-        }
+            errorEmitter.emit('permission-error', permissionError);
+            toast({ variant: 'destructive', title: 'Action Failed', description: e.message });
+        });
+        toast({ title: 'Request Rejected' });
+        onFinished();
     };
     
     return (
@@ -135,7 +130,7 @@ export function TechleadRequestsTable({
   
   const [requestToReject, setRequestToReject] = useState<AccessRequest | null>(null);
 
-  const handleApprove = async (request: AccessRequest) => {
+  const handleApprove = (request: AccessRequest) => {
     if (!firestore || !currentUser) return;
     const requestDocRef = doc(firestore, 'requests', request.id);
     
@@ -145,21 +140,17 @@ export function TechleadRequestsTable({
         resolvedAt: serverTimestamp(),
     };
 
-    try {
-        await updateDoc(requestDocRef, updateData)
-         .catch((e) => {
-            const permissionError = new FirestorePermissionError({
-                path: requestDocRef.path,
-                operation: 'update',
-                requestResourceData: updateData,
-            });
-            errorEmitter.emit('permission-error', permissionError);
-            throw permissionError;
+    updateDoc(requestDocRef, updateData)
+     .catch((e) => {
+        const permissionError = new FirestorePermissionError({
+            path: requestDocRef.path,
+            operation: 'update',
+            requestResourceData: updateData,
         });
-        toast({ title: "Request Approved", description: "The request has been sent to an admin for final processing." });
-    } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Action Failed', description: error.message });
-    }
+        errorEmitter.emit('permission-error', permissionError);
+        toast({ variant: 'destructive', title: 'Action Failed', description: e.message });
+    });
+    toast({ title: "Request Approved", description: "The request has been sent to an admin for final processing." });
   };
 
   if (isLoading) {
