@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
@@ -20,48 +19,51 @@ import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore';
 export default function HomePage() {
   const router = useRouter();
   const auth = useAuth();
-  const { user, isUserLoading: isLoading } = useUser();
+  const { user, isUserLoading } = useUser();
   const { toast } = useToast();
+  const [isProcessing, setIsProcessing] = useState(true);
 
   useEffect(() => {
-    if (!auth || isLoading) {
-        return;
-    }
-    
-    // If a user is already logged in, no need to check for redirect, just go to dashboard.
-    if(user) {
-        router.push('/dashboard');
-        return;
+    // If a user is already logged in, redirect them to the dashboard.
+    if (!isUserLoading && user) {
+      router.push('/dashboard');
+      return;
     }
 
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result) {
-          // This is the signed-in user
-          const user = result.user;
-          // Create a user profile if it doesn't exist
-          await createUserProfile(user);
-          // Force token refresh to get custom claims
-          await user.getIdToken(true);
-          // Redirect to the dashboard
-          router.push('/dashboard');
-        }
-        // If result is null, it means we are not coming from a redirect.
-        // We do nothing and just show the login page.
-      })
-      .catch((error) => {
-        console.error("Authentication error: ", error);
-        toast({
-          variant: "destructive",
-          title: "Sign-in Failed",
-          description: error.message || "An unexpected error occurred during sign-in.",
+    // If there's no user and auth is ready, check for a redirect result.
+    if (!isUserLoading && !user && auth) {
+      getRedirectResult(auth)
+        .then(async (result) => {
+          if (result) {
+            // This is the signed-in user
+            const loggedInUser = result.user;
+            // Create a user profile if it doesn't exist
+            await createUserProfile(loggedInUser);
+            // Force token refresh to get custom claims (if any are set immediately)
+            await loggedInUser.getIdToken(true);
+            // Redirect to the dashboard
+            router.push('/dashboard');
+          } else {
+            // Not a redirect, so login process is finished for this page load.
+            setIsProcessing(false);
+          }
+        })
+        .catch((error) => {
+          console.error("Authentication error: ", error);
+          toast({
+            variant: "destructive",
+            title: "Sign-in Failed",
+            description: error.message || "An unexpected error occurred during sign-in.",
+          });
+          setIsProcessing(false);
         });
-      });
-  }, [auth, isLoading, user, toast]);
+    }
+  }, [user, isUserLoading, auth, router, toast]);
 
   const handleSignIn = async () => {
     if (!auth) return;
     const provider = new GoogleAuthProvider();
+    // Start the sign-in process, but don't wait here. The result is handled by getRedirectResult.
     await signInWithRedirect(auth, provider);
   };
 
@@ -82,13 +84,15 @@ export default function HomePage() {
     }
   };
 
-  if (isLoading || user) {
+  // Show a loading indicator while checking auth state or processing a redirect.
+  if (isUserLoading || isProcessing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p>Loading...</p>
       </div>
     );
   }
+
 
   return (
     <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
