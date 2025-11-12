@@ -50,26 +50,21 @@ service cloud.firestore {
     match /requests/{requestId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
-      // LIST: Admins can list all. TechLeads can list requests for their team members.
-      allow list: if isAdmin() || 
-                  (isTechLead() && getUserData(request.auth.uid).teamId == getUserData(request.query.filters[0].value[0]).teamId);
+      allow list: if isAdmin();
 
-      // GET: A user can get their own request. An admin can get any. A tech lead can get requests from their team.
       function isUserOnTechLeadsTeam(userId) {
         let techLeadTeamId = getUserData(request.auth.uid).teamId;
         let userTeamId = getUserData(userId).teamId;
-        return techLeadTeamId != null && techLeadTeamId == userTeamId;
+        return isTechLead() && techLeadTeamId != null && techLeadTeamId == userTeamId;
       }
       allow get: if isSignedIn() && (
         resource.data.userId == request.auth.uid || 
         isAdmin() ||
-        (isTechLead() && isUserOnTechLeadsTeam(resource.data.userId))
+        isUserOnTechLeadsTeam(resource.data.userId)
       );
 
-      // UPDATE: Admins and TechLeads can update requests for their team.
-      allow update: if isSignedIn() && (isAdmin() || (isTechLead() && isUserOnTechLeadsTeam(resource.data.userId)));
+      allow update: if isSignedIn() && (isAdmin() || isUserOnTechLeadsTeam(resource.data.userId));
       
-      // DELETE: Only admins can delete requests.
       allow delete: if isAdmin();
     }
   }

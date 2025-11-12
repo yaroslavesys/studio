@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
   doc,
   updateDoc,
@@ -10,9 +10,12 @@ import {
   collection,
   query,
   where,
-  orderBy
+  orderBy,
+  getDocs,
+  QuerySnapshot,
+  DocumentData,
 } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -127,18 +130,48 @@ export function TechleadRequestsTable({
   const { toast } = useToast();
   
   const [requestToReject, setRequestToReject] = useState<AccessRequest | null>(null);
+  const [requests, setRequests] = useState<AccessRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<FirestoreError | null>(null);
 
-  const teamRequestsQuery = useMemoFirebase(() => {
-    if (!firestore || !teamMemberIds || teamMemberIds.length === 0) return null;
-    return query(
-      collection(firestore, 'requests'),
-      where('userId', 'in', teamMemberIds),
-      where('status', '==', 'pending'),
-      orderBy('requestedAt', 'desc')
-    );
+
+  useEffect(() => {
+    if (!firestore || !teamMemberIds || teamMemberIds.length === 0) {
+        setIsLoading(false);
+        setRequests([]);
+        return;
+    }
+
+    const fetchRequests = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const requestsRef = collection(firestore, 'requests');
+            const q = query(
+                requestsRef,
+                where('userId', 'in', teamMemberIds),
+                where('status', '==', 'pending'),
+                orderBy('requestedAt', 'desc')
+            );
+            
+            const snapshot = await getDocs(q);
+            const fetchedRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccessRequest));
+            setRequests(fetchedRequests);
+
+        } catch (err: any) {
+             const permissionError = new FirestorePermissionError({
+                path: 'requests',
+                operation: 'list',
+             });
+             errorEmitter.emit('permission-error', permissionError);
+             setError(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    fetchRequests();
   }, [firestore, teamMemberIds]);
-
-  const { data: requests, isLoading, error } = useCollection<AccessRequest>(teamRequestsQuery);
 
 
   const handleApprove = (request: AccessRequest) => {
@@ -162,7 +195,14 @@ export function TechleadRequestsTable({
         toast({ variant: 'destructive', title: 'Action Failed', description: e.message });
     });
     toast({ title: "Request Approved", description: "The request has been sent to an admin for final processing." });
+    setRequests(prev => prev.filter(r => r.id !== request.id));
   };
+  
+  const onRejectFinished = (rejectedRequest: AccessRequest) => {
+    setRequestToReject(null);
+    setRequests(prev => prev.filter(r => r.id !== rejectedRequest.id));
+  }
+
 
   if (isLoading) {
     return <Skeleton className="h-48 w-full" />;
@@ -256,7 +296,7 @@ export function TechleadRequestsTable({
               Are you sure you want to reject this request? You can provide notes below.
             </DialogDescription>
           </DialogHeader>
-          {requestToReject && <RejectRequestForm request={requestToReject} onFinished={() => setRequestToReject(null)} />}
+          {requestToReject && <RejectRequestForm request={requestToReject} onFinished={() => onRejectFinished(requestToReject)} />}
         </DialogContent>
       </Dialog>
     </>
