@@ -99,6 +99,12 @@ service cloud.firestore {
     }
 
     // REQUESTS
+    // Rule to allow list queries by admins and tech leads
+    match /requests/{document=**} {
+      allow list: if isAdmin() || isTechLead();
+    }
+
+    // Rule for individual document access (get, create, update, delete)
     match /requests/{requestId} {
       // Users can create their own requests.
       // The request must be for the user themselves and start in 'pending' state.
@@ -109,9 +115,6 @@ service cloud.firestore {
       // Admins and TechLeads can read any request to manage them.
       // Users can only read their own requests.
       allow get: if isSignedIn() && (isAdmin() || isTechLead() || resource.data.userId == request.auth.uid);
-      
-      // Admins and TechLeads can query for requests.
-      allow list: if isSignedIn() && (isAdmin() || isTechLead());
 
       // Admins and TechLeads can update requests. The UI logic prevents incorrect state transitions.
       // The rules just verify the actor has the role and the required fields are present.
