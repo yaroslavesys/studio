@@ -27,24 +27,22 @@ export default function HomePage() {
     // If a user is already logged in, redirect them to the dashboard.
     if (!isUserLoading && user) {
       router.push('/dashboard');
-      return;
+      return; // Stop further execution
     }
 
-    // If there's no user and auth is ready, check for a redirect result.
+    // This block handles the redirect result from Google Sign-In.
     if (!isUserLoading && !user && auth) {
       getRedirectResult(auth)
         .then(async (result) => {
           if (result) {
-            // This is the signed-in user
+            // User has successfully signed in.
             const loggedInUser = result.user;
-            // Create a user profile if it doesn't exist
-            await createUserProfile(loggedInUser);
-            // Force token refresh to get custom claims (if any are set immediately)
-            await loggedInUser.getIdToken(true);
-            // Redirect to the dashboard
-            router.push('/dashboard');
+            await createUserProfile(loggedInUser); // Ensure profile exists
+            await loggedInUser.getIdToken(true); // Force token refresh for custom claims
+            router.push('/dashboard'); // Redirect to dashboard
           } else {
-            // Not a redirect, so login process is finished for this page load.
+            // No redirect result, meaning the user is visiting the page normally.
+            // It's safe to stop the processing indicator and show the login button.
             setIsProcessing(false);
           }
         })
@@ -55,16 +53,16 @@ export default function HomePage() {
             title: "Sign-in Failed",
             description: error.message || "An unexpected error occurred during sign-in.",
           });
-          setIsProcessing(false);
+          setIsProcessing(false); // Stop processing on error
         });
     }
   }, [user, isUserLoading, auth, router, toast]);
 
-  const handleSignIn = async () => {
+  const handleSignIn = () => {
     if (!auth) return;
     const provider = new GoogleAuthProvider();
-    // Start the sign-in process, but don't wait here. The result is handled by getRedirectResult.
-    await signInWithRedirect(auth, provider);
+    // Start the sign-in process by redirecting the user.
+    signInWithRedirect(auth, provider);
   };
 
   const createUserProfile = async (user: User) => {
@@ -73,6 +71,7 @@ export default function HomePage() {
     const userDoc = await getDoc(userDocRef);
 
     if (!userDoc.exists()) {
+      // Only create a new profile if one doesn't exist.
       await setDoc(userDocRef, {
         uid: user.uid,
         email: user.email,
@@ -84,7 +83,7 @@ export default function HomePage() {
     }
   };
 
-  // Show a loading indicator while checking auth state or processing a redirect.
+  // Show a loading indicator while checking auth state or processing the redirect.
   if (isUserLoading || isProcessing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -94,6 +93,7 @@ export default function HomePage() {
   }
 
 
+  // If not loading and no user, show the login page.
   return (
     <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
