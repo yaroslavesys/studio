@@ -66,10 +66,14 @@ export default function TechLeadRequestsPage() {
   const { data: services, isLoading: isLoadingServices, error: servicesError } = useCollection<Service>(servicesQuery);
 
   // This query finds all requests from the members of the tech lead's team.
+  // This is more secure and efficient than fetching all requests.
   const teamRequestsQuery = useMemoFirebase(() => {
     if (!firestore || !teamMembers || teamMembers.length === 0) return null;
     const memberIds = teamMembers.map(m => m.uid);
-    if(memberIds.length === 0) return null;
+    // Firestore 'in' queries are limited to 30 elements. If a team could have more,
+    // this would need a more complex solution (e.g., duplicating requests in a subcollection).
+    // For this app, we assume teams are smaller than 30.
+    if(memberIds.length === 0) return null; // Avoid empty 'in' query which throws error
     return query(
       collection(firestore, 'requests'),
       where('userId', 'in', memberIds),
@@ -81,6 +85,7 @@ export default function TechLeadRequestsPage() {
 
   const pendingRequests = useMemo(() => {
     if (!requests) return [];
+    // Tech leads only need to see requests awaiting their approval.
     return requests.filter(req => req.status === 'pending');
   }, [requests]);
 
