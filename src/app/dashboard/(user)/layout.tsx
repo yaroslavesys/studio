@@ -78,16 +78,6 @@ export default function UserDashboardLayout({
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
-             <SidebarMenuItem>
-              <Link href="/dashboard/contacts">
-                <SidebarMenuButton
-                  isActive={pathname.startsWith('/dashboard/contacts')}
-                >
-                  <Mail />
-                  Contacts
-                </SidebarMenuButton>
-              </Link>
-            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>

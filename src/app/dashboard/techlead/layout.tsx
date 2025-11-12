@@ -65,9 +65,9 @@ export default function TechLeadDashboardLayout({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/dashboard/contacts">
+              <Link href="/dashboard/techlead/contacts">
                 <SidebarMenuButton
-                  isActive={pathname.startsWith('/dashboard/contacts')}
+                  isActive={pathname.startsWith('/dashboard/techlead/contacts')}
                 >
                   <Mail />
                   Contacts
