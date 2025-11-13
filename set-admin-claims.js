@@ -7,19 +7,15 @@
 const admin = require('firebase-admin');
 
 // --- Configuration ---
-// 1. IMPORTANT: Replace these placeholder UIDs with the actual UIDs from your Firebase project.
+// 1. IMPORTANT: Replace the placeholder UID with the actual UID from your Firebase project.
 // You can find the UID in the Firebase Console under Authentication -> Users.
 const usersToUpdate = [
   {
-    // The user who should be an administrator
-    uid: 'REPLACE_WITH_ADMIN_UID', 
-    claims: { isAdmin: true, isTechLead: false }
+    // This is the user who will become the first administrator.
+    uid: 'REPLACE_WITH_YOUR_FIREBASE_UID', 
+    claims: { isAdmin: true, isTechLead: false, teamId: null }
   },
-  // Example for a tech lead. You can add more users.
-  {
-    uid: 'REPLACE_WITH_TECHLEAD_UID', 
-    claims: { isAdmin: false, isTechLead: true }
-  }
+  // You can manage other users and tech leads from the admin panel in the app later.
 ];
 
 // --- Initialization ---
@@ -48,7 +44,7 @@ try {
 async function setCustomClaims() {
   // Safety check to prevent running with placeholder UIDs.
   if (usersToUpdate.some(u => u.uid.startsWith('REPLACE_WITH'))) {
-    console.error('\x1b[31m%s\x1b[0m', 'Error: Please replace the placeholder UIDs in set-admin-claims.js with real UIDs from your Firebase Authentication users.');
+    console.error('\x1b[31m%s\x1b[0m', 'Error: Please replace the placeholder UID in set-admin-claims.js with your real UID from your Firebase Authentication users.');
     return;
   }
   
@@ -59,8 +55,19 @@ async function setCustomClaims() {
 
   for (const user of usersToUpdate) {
     try {
+      const userDocRef = admin.firestore().collection('users').doc(user.uid);
+      
+      // Update both Auth claims and Firestore document in one go.
       await admin.auth().setCustomUserClaims(user.uid, user.claims);
-      console.log(`\x1b[32mSUCCESS:\x1b[0m Claims ${JSON.stringify(user.claims)} set for user UID: ${user.uid}`);
+      console.log(`\x1b[32mSUCCESS (Auth):\x1b[0m Claims ${JSON.stringify(user.claims)} set for user UID: ${user.uid}`);
+      
+      await userDocRef.update({ 
+        isAdmin: user.claims.isAdmin, 
+        isTechLead: user.claims.isTechLead, 
+        teamId: user.claims.teamId 
+      });
+      console.log(`\x1b[32mSUCCESS (Firestore):\x1b[0m User document updated for UID: ${user.uid}`);
+
       successCount++;
     } catch (error) {
       console.error(`\x1b[31mERROR for UID ${user.uid}:\x1b[0m`, error.message);
@@ -73,3 +80,4 @@ async function setCustomClaims() {
 
 // Run the script
 setCustomClaims();
+
