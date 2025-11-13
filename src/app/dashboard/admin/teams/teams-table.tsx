@@ -4,10 +4,9 @@ import { useMemo, useState } from 'react';
 import {
   collection,
   doc,
-  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useFunctions } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -65,12 +64,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Service } from '@/lib/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { deleteDoc, addDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 
 // --- Types ---
@@ -79,6 +77,7 @@ interface UserProfile {
   email: string;
   displayName: string;
   isTechLead?: boolean;
+  teamId?: string;
 }
 
 interface Team {
@@ -112,6 +111,7 @@ function TeamForm({
   onFinished: () => void;
 }) {
   const firestore = useFirestore();
+  const functions = useFunctions();
   const { toast } = useToast();
   const isEditing = !!team;
 
@@ -125,74 +125,70 @@ function TeamForm({
   });
 
   const onSubmit = async (values: z.infer<typeof teamFormSchema>) => {
-    if (!firestore) return;
+    if (!firestore || !functions) return;
+    
     const batch = writeBatch(firestore);
-    const newTechLeadId = values.techLeadId === 'none' ? undefined : values.techLeadId;
+    const newTechLeadId = values.techLeadId === 'none' || !values.techLeadId ? undefined : values.techLeadId;
     const previousTechLeadId = team?.techLeadId;
+    const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
 
-    const finalValues = {
-        ...values,
+    const finalTeamData: Omit<Team, 'id'> = {
+        name: values.name,
+        availableServiceIds: values.availableServiceIds,
         techLeadId: newTechLeadId,
-    }
+    };
 
     try {
       if (isEditing) {
+        // Update team document
         const teamDocRef = doc(firestore, 'teams', team.id);
-        batch.update(teamDocRef, finalValues);
-
+        batch.update(teamDocRef, finalTeamData);
+        
+        // Handle tech lead changes
         if (newTechLeadId !== previousTechLeadId) {
-          if (newTechLeadId) {
-            const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
-            batch.update(newTechLeadRef, { isTechLead: true, teamId: team.id });
-          }
-
+          // Demote previous tech lead if they are no longer leading this team
           if (previousTechLeadId) {
-            const otherTeamsLed = teams.filter(
-              (t) =>
-                t.techLeadId === previousTechLeadId && t.id !== team.id
-            );
-            if (otherTeamsLed.length === 0) {
-              const previousTechLeadRef = doc(firestore, 'users', previousTechLeadId);
-              batch.update(previousTechLeadRef, { isTechLead: false, teamId: null });
+            const previousTechLeadUser = users.find(u => u.uid === previousTechLeadId);
+            if(previousTechLeadUser) {
+                // Check if they lead other teams
+                const leadsOtherTeams = teams.some(t => t.techLeadId === previousTechLeadId && t.id !== team.id);
+                if (!leadsOtherTeams) {
+                    await setCustomClaims({ uid: previousTechLeadId, claims: { isTechLead: false, teamId: null, isAdmin: previousTechLeadUser.isAdmin } });
+                }
             }
           }
+          // Promote new tech lead
+          if (newTechLeadId) {
+             const newTechLeadUser = users.find(u => u.uid === newTechLeadId);
+             if(newTechLeadUser) {
+                await setCustomClaims({ uid: newTechLeadId, claims: { isTechLead: true, teamId: team.id, isAdmin: newTechLeadUser.isAdmin } });
+             }
+          }
         }
-        await batch.commit().catch(async () => {
-           const permissionError = new FirestorePermissionError({
-            path: teamDocRef.path,
-            operation: 'update',
-            requestResourceData: finalValues,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        });
+      } else { // Creating a new team
+        const newTeamRef = doc(collection(firestore, 'teams'));
+        batch.set(newTeamRef, finalTeamData);
 
-        toast({ title: 'Team Updated', description: `The ${values.name} team has been updated.` });
-
-      } else {
-        const teamsCollectionRef = collection(firestore, 'teams');
-        const newTeamRef = doc(teamsCollectionRef);
-        
-        batch.set(newTeamRef, finalValues);
-
+        // If a tech lead is assigned on creation, update their claims
         if (newTechLeadId) {
-            const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
-            batch.update(newTechLeadRef, { isTechLead: true, teamId: newTeamRef.id });
+            const newTechLeadUser = users.find(u => u.uid === newTechLeadId);
+            if (newTechLeadUser) {
+              await setCustomClaims({ uid: newTechLeadId, claims: { isTechLead: true, teamId: newTeamRef.id, isAdmin: newTechLeadUser.isAdmin } });
+            }
         }
-        
-        await batch.commit().catch(async () => {
-            const permissionError = new FirestorePermissionError({
-            path: teamsCollectionRef.path,
-            operation: 'create',
-            requestResourceData: finalValues,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        });
-        toast({ title: 'Team Created', description: `The ${values.name} team has been created.` });
       }
 
+      await batch.commit();
+      toast({ title: isEditing ? 'Team Updated' : 'Team Created' });
       onFinished();
+
     } catch (error: any) {
-      // The .catch() blocks above will handle permission errors
+        console.error("Error saving team:", error);
+        toast({
+            variant: "destructive",
+            title: 'Save Failed',
+            description: error.message || 'Could not save team data.',
+        });
     }
   };
 
@@ -227,7 +223,7 @@ function TeamForm({
             render={({ field }) => (
                 <FormItem>
                 <FormLabel>Tech Lead (Optional)</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} defaultValue={field.value || 'none'}>
                     <FormControl>
                     <SelectTrigger>
                         <SelectValue placeholder="Select a user to lead the team" />
@@ -390,13 +386,7 @@ export function TeamsTable() {
       // TODO: Unassign all users from the deleted team.
       
       // 4. Commit the batch
-      await batch.commit().catch(async () => {
-        const permissionError = new FirestorePermissionError({
-          path: teamDocRef.path,
-          operation: 'delete',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      });
+      await batch.commit();
 
       toast({ title: 'Team Deleted', description: `The ${teamToDelete.name} team has been deleted.` });
   };

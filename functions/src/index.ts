@@ -1,3 +1,4 @@
+
 /**
  * This file is the entry point for all of your backend logic (Cloud Functions).
  *
@@ -11,7 +12,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
-
 
 // This is the only place you should initialize the Admin SDK
 admin.initializeApp();
@@ -59,7 +59,8 @@ export const setCustomClaims = onCall(async (request) => {
   
   // Sanitize claims: ensure teamId is null if user is not a tech lead.
   const finalClaims = {
-    ...claims,
+    isAdmin: !!claims.isAdmin,
+    isTechLead: !!claims.isTechLead,
     teamId: claims.isTechLead ? claims.teamId : null,
   };
 
@@ -68,6 +69,15 @@ export const setCustomClaims = onCall(async (request) => {
     // 3. Use the Admin SDK to set the custom claims on the target user.
     // This action is privileged and can only be done on the server.
     await admin.auth().setCustomUserClaims(uid, finalClaims);
+    
+    // Also update the user's document in Firestore to reflect the new state
+    const userDocRef = admin.firestore().collection('users').doc(uid);
+    await userDocRef.update({
+        isAdmin: finalClaims.isAdmin,
+        isTechLead: finalClaims.isTechLead,
+        teamId: finalClaims.teamId
+    });
+
 
     logger.info(`Successfully set claims for user ${uid}`, { claims: finalClaims });
 

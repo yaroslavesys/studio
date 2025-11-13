@@ -1,7 +1,7 @@
 
 'use client';
 import { useState, useMemo } from 'react';
-import { collection, doc, updateDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useCollection, useFirestore, useMemoFirebase, useFunctions } from '@/firebase';
 import {
   Table,
@@ -51,8 +51,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { httpsCallable } from 'firebase/functions';
 
 
@@ -70,6 +68,7 @@ interface UserProfile {
 interface Team {
   id: string;
   name: string;
+  techLeadId?: string;
 }
 
 // --- Edit User Form ---
@@ -78,14 +77,13 @@ const formSchema = z.object({
   isTechLead: z.boolean(),
   teamId: z.string().optional(),
 }).refine(data => {
-    // If user is a tech lead, they must be assigned to a team.
     if (data.isTechLead && (!data.teamId || data.teamId === 'none')) {
         return false;
     }
     return true;
 }, {
     message: "A Tech Lead must be assigned to a team.",
-    path: ["teamId"], // This error will be shown under the teamId field
+    path: ["teamId"],
 });
 
 
@@ -98,7 +96,6 @@ function EditUserForm({
   teams: Team[];
   onFinished: () => void;
 }) {
-  const firestore = useFirestore();
   const functions = useFunctions();
   const { toast } = useToast();
 
@@ -107,33 +104,20 @@ function EditUserForm({
     defaultValues: {
       isAdmin: user.isAdmin,
       isTechLead: user.isTechLead,
-      teamId: user.teamId || '',
+      teamId: user.teamId || 'none',
     },
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!firestore || !functions) return;
-    const userDocRef = doc(firestore, 'users', user.uid);
+    if (!functions) return;
     
-    let teamIdForUpdate = values.teamId === 'none' || values.teamId === '' ? null : values.teamId;
+    const teamIdForUpdate = values.teamId === 'none' ? null : values.teamId;
 
-    // If the user is no longer a tech lead, ensure their teamId is also removed.
-    if (!values.isTechLead) {
-        teamIdForUpdate = null;
-    }
-
-    const displayUpdateData: any = { 
-        teamId: teamIdForUpdate,
-        isAdmin: values.isAdmin,
-        isTechLead: values.isTechLead,
-    };
-    
-    // This data is for security rules via Custom Claims
     const claimsUpdateData = {
         isAdmin: values.isAdmin,
         isTechLead: values.isTechLead,
-        teamId: displayUpdateData.teamId, 
-    }
+        teamId: values.isTechLead ? teamIdForUpdate : null, 
+    };
 
     try {
         const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
@@ -142,8 +126,6 @@ function EditUserForm({
             claims: claimsUpdateData
         });
         
-        await updateDoc(userDocRef, displayUpdateData);
-
         toast({
             title: 'User Updated',
             description: `Successfully updated ${user.displayName}. Their new roles will apply on their next login.`,
@@ -153,23 +135,15 @@ function EditUserForm({
 
     } catch(error: any) {
         console.error("Error updating user or setting claims:", error);
-        
-        if (error.code === 'permission-denied' && error.details?.path) {
-             const permissionError = new FirestorePermissionError({
-                path: error.details.path,
-                operation: error.details.operation,
-                requestResourceData: error.details.requestResourceData,
-            });
-            errorEmitter.emit('permission-error', permissionError);
-        } else {
-             toast({
-                variant: "destructive",
-                title: 'Update Failed',
-                description: error.message || 'Could not update user roles or profile.',
-            });
-        }
+        toast({
+            variant: "destructive",
+            title: 'Update Failed',
+            description: error.message || 'Could not update user roles or profile.',
+        });
     }
   };
+  
+  const availableTeams = teams.filter(team => !team.techLeadId || team.techLeadId === user.uid);
 
   return (
     <Form {...form}>
@@ -224,6 +198,7 @@ function EditUserForm({
                 <Select
                   onValueChange={field.onChange}
                   defaultValue={field.value}
+                  disabled={!form.watch('isTechLead')}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -232,7 +207,7 @@ function EditUserForm({
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="none">No Team</SelectItem>
-                    {teams.map((team) => (
+                    {availableTeams.map((team) => (
                       <SelectItem key={team.id} value={team.id}>
                         {team.name}
                       </SelectItem>
@@ -240,7 +215,7 @@ function EditUserForm({
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  Assign this user to a development team.
+                  Assign this user to a team. Required for Tech Leads.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -381,7 +356,7 @@ export function UsersTable() {
           </TableBody>
         </Table>
       </div>
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit {selectedUser?.displayName}</DialogTitle>
