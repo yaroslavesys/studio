@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,29 +21,34 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const [isProcessing, setIsProcessing] = useState(true); // Start as true to handle redirect result
+  const [isProcessing, setIsProcessing] = useState(true);
+  const [isInIframe, setIsInIframe] = useState(false);
 
-  // Effect to handle redirect result on page load
   useEffect(() => {
-    if (!auth) return;
+    // Эта проверка определит, находимся ли мы в iframe.
+    // Она выполнится только на клиенте, избегая ошибок гидратации.
+    setIsInIframe(window.self !== window.top);
+  }, []);
 
-    // If user is already loaded from a previous session, just redirect.
-    if (user) {
-      router.push('/dashboard');
+  // Эффект для обработки результата редиректа
+  useEffect(() => {
+    if (!auth || user) {
+        if(user) {
+            router.push('/dashboard');
+        } else {
+             setIsProcessing(false);
+        }
       return;
     }
     
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
-          // User has successfully signed in via redirect.
           toast({ title: "Signed In", description: "Successfully authenticated."});
           await createUserProfile(result.user);
-          await result.user.getIdToken(true); // Refresh token to get custom claims
+          await result.user.getIdToken(true); 
           router.push('/dashboard');
         } else {
-          // No redirect result, user is not logged in.
-          // Stop the loading indicator.
           setIsProcessing(false);
         }
       })
@@ -56,8 +61,6 @@ export default function HomePage() {
         });
         setIsProcessing(false);
       });
-      
-  // This effect should only run once on component mount with the auth instance.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth]);
 
@@ -89,21 +92,36 @@ export default function HomePage() {
 
   const handleSignIn = async () => {
     if (!auth) {
-      toast({
-        variant: 'destructive',
-        title: 'Authentication service not ready',
-        description: 'Please try again in a moment.',
-      });
+      toast({ variant: 'destructive', title: 'Authentication service not ready' });
       return;
     }
     setIsProcessing(true);
     const provider = new GoogleAuthProvider();
-    // Use signInWithRedirect for a robust flow that works everywhere
-    await signInWithRedirect(auth, provider);
+
+    if (isInIframe) {
+      // Для iframe мы используем signInWithRedirect, так как это самый надежный способ,
+      // который не блокируется браузерами. Он перезагрузит весь фрейм.
+      await signInWithRedirect(auth, provider);
+    } else {
+      // Для обычного окна используем signInWithPopup
+      try {
+        const result = await signInWithPopup(auth, provider);
+        toast({ title: "Signed In", description: "Successfully authenticated."});
+        await createUserProfile(result.user);
+        await result.user.getIdToken(true);
+        router.push('/dashboard');
+      } catch (error: any) {
+         toast({
+          variant: "destructive",
+          title: "Sign-in Failed",
+          description: error.message || "An error occurred during sign-in.",
+        });
+        setIsProcessing(false);
+      }
+    }
   };
 
 
-  // Show a loading indicator while checking auth state or processing sign-in.
   if (isUserLoading || isProcessing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -112,27 +130,36 @@ export default function HomePage() {
     );
   }
 
-  // If not loading and no user, show the login page.
+  // Если не загружаемся и нет пользователя, показать страницу входа
+  if (!user) {
+    return (
+        <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
+            <CardHeader className="text-center">
+            <div className="mx-auto mb-6">
+                <Logo />
+            </div>
+            <CardTitle className="font-headline text-3xl tracking-tighter">
+                Welcome to Devils access
+            </CardTitle>
+            <CardDescription className="pt-1">
+                Sign in to access your dashboard.
+            </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+            <Button onClick={handleSignIn} disabled={isProcessing}>
+                Sign in with Google
+            </Button>
+            </CardContent>
+        </Card>
+        </div>
+    );
+  }
+
+  // Если пользователь уже вошел, можно просто показать загрузку или null перед редиректом
   return (
-    <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-6">
-            <Logo />
-          </div>
-          <CardTitle className="font-headline text-3xl tracking-tighter">
-            Welcome to Devils access
-          </CardTitle>
-          <CardDescription className="pt-1">
-            Sign in to access your dashboard.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <Button onClick={handleSignIn} disabled={isProcessing}>
-            Sign in with Google
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+     <div className="flex min-h-screen items-center justify-center bg-background">
+        <p>Redirecting to dashboard...</p>
+      </div>
   );
 }
