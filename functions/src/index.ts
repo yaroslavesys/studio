@@ -37,13 +37,28 @@ export const setCustomClaims = onCall(async (request) => {
 
   // 2. Get the parameters from the client-side call.
   const { uid, claims } = request.data;
-
+  
   // Basic validation.
   if (typeof uid !== "string" || !claims || typeof claims !== 'object') {
      throw new HttpsError(
       "invalid-argument",
       "The function must be called with 'uid' and 'claims' arguments."
     );
+  }
+
+  // **CRITICAL VALIDATION LOGIC**
+  // A tech lead MUST be assigned to a team.
+  // If we try to make someone a tech lead, their claims MUST include a teamId.
+  if (claims.isTechLead === true && !claims.teamId) {
+     throw new HttpsError(
+      "invalid-argument",
+      "A user cannot be a Tech Lead without being assigned to a team."
+    );
+  }
+
+  // If a user is NOT a tech lead, ensure their teamId claim is also removed for consistency.
+  if (claims.isTechLead === false && claims.teamId) {
+    claims.teamId = null;
   }
 
   try {
