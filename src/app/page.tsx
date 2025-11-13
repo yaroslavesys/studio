@@ -40,6 +40,9 @@ export default function HomePage() {
       return;
     }
 
+    // This is the core logic for the redirect flow.
+    // getRedirectResult() returns a promise that resolves with the user credential
+    // if the user has just signed in via redirect, or null otherwise.
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
@@ -48,9 +51,10 @@ export default function HomePage() {
           await createUserProfile(result.user);
           // Force token refresh to get custom claims if they exist
           await result.user.getIdToken(true); 
-          // This navigation will be handled by the effect checking `user`
+          // The navigation will be handled by the next run of this effect when `user` is set.
         } else {
-          // No redirect result, so this is a fresh visit.
+          // No redirect result, so this is a fresh visit or the user is already logged in.
+          // In either case, we can stop the processing indicator.
           setIsProcessing(false);
         }
       })
@@ -105,7 +109,7 @@ export default function HomePage() {
     const provider = new GoogleAuthProvider();
 
     // Use signInWithRedirect. This is the most reliable method for all environments,
-    // as it avoids popup blockers and iframe issues.
+    // as it avoids popup blockers and iframe issues in production.
     await signInWithRedirect(auth, provider);
   };
 
