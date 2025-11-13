@@ -12,12 +12,12 @@ const admin = require('firebase-admin');
 const usersToUpdate = [
   {
     // The user who should be an administrator
-    uid: '0A9LFbbNpuXGh09Hvden5NFoSvh1', 
+    uid: 'REPLACE_WITH_ADMIN_UID', 
     claims: { isAdmin: true, isTechLead: false }
   },
   // Example for a tech lead. You can add more users.
   {
-    uid: '5W608RpIJbbWFtUE8WxQgFwep622', 
+    uid: 'REPLACE_WITH_TECHLEAD_UID', 
     claims: { isAdmin: false, isTechLead: true }
   }
 ];
