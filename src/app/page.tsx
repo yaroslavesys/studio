@@ -36,7 +36,8 @@ export default function HomePage() {
           // User has successfully signed in.
           const loggedInUser = result.user;
           await createUserProfile(loggedInUser);
-          await loggedInUser.getIdToken(true);
+          // Force a token refresh to ensure custom claims are loaded if they exist
+          await loggedInUser.getIdToken(true); 
           router.push('/dashboard');
         } else {
           // No redirect result, probably a direct page load
@@ -77,12 +78,14 @@ export default function HomePage() {
   };
 
   const createUserProfile = async (user: User) => {
+    // We get a new firestore instance here to ensure it's available.
     const firestore = getFirestore();
     const userDocRef = doc(firestore, 'users', user.uid);
     try {
         const userDoc = await getDoc(userDocRef);
 
         if (!userDoc.exists()) {
+          // Create the user document with default non-admin/non-techlead roles.
           await setDoc(userDocRef, {
             uid: user.uid,
             email: user.email,
@@ -94,10 +97,11 @@ export default function HomePage() {
         }
     } catch (error) {
         console.error("Error creating or checking user profile:", error);
+        // This toast is important for debugging profile creation issues.
         toast({
             variant: "destructive",
             title: "Profile Error",
-            description: "Could not create or check your user profile.",
+            description: "Could not create or check your user profile after sign-in.",
         });
     }
   };
