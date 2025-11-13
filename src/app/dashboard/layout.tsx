@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -20,26 +21,21 @@ export default function DashboardLayout({
   const [hasCheckedRole, setHasCheckedRole] = useState(false);
 
   useEffect(() => {
-    // Wait until Firebase has finished its initial user check.
     if (isUserLoading) {
-      return; // Do nothing, wait for loading to finish.
+      return; 
     }
 
-    // If loading is done and there's no user, redirect to the login page.
     if (!user) {
       router.replace('/');
       return;
     }
     
-    // If we have a user, check their roles.
     const checkUserRole = async () => {
-      // Force a refresh of the ID token to get the latest custom claims.
       const idTokenResult = await user.getIdTokenResult(true);
       const claims = (idTokenResult.claims || {}) as Partial<UserProfile>;
       const isAdmin = claims.isAdmin === true;
       const isTechLead = claims.isTechLead === true;
 
-      // Redirect based on role and current path.
       if (isAdmin && !pathname.startsWith('/dashboard/admin')) {
         router.replace('/dashboard/admin');
       } else if (!isAdmin && isTechLead && !pathname.startsWith('/dashboard/techlead')) {
@@ -48,7 +44,6 @@ export default function DashboardLayout({
         router.replace('/dashboard');
       }
       
-      // Role check is complete, we can show the content.
       setHasCheckedRole(true);
     };
 
@@ -56,7 +51,6 @@ export default function DashboardLayout({
     
   }, [user, isUserLoading, router, pathname]);
 
-  // While Firebase is loading OR we are checking the role, show a loading screen.
   if (isUserLoading || !hasCheckedRole) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -65,6 +59,5 @@ export default function DashboardLayout({
     );
   }
 
-  // If all checks have passed, render the actual dashboard page.
   return <>{children}</>;
 }

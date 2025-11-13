@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -21,34 +22,26 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  // This state tracks the redirect processing specifically.
   const [isProcessingRedirect, setIsProcessingRedirect] = useState(true);
 
-  // Effect 1: Handle redirection *after* auth state is confirmed.
   useEffect(() => {
-    // If auth is not loading and we have a user, redirect.
     if (!isUserLoading && user) {
       router.push('/dashboard');
     }
   }, [user, isUserLoading, router]);
 
-  // Effect 2: Handle the result from a redirect sign-in flow. This runs once.
   useEffect(() => {
     if (!auth) {
-        setIsProcessingRedirect(false);
-        return;
+      setIsProcessingRedirect(false);
+      return;
     }
 
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
-          // User has successfully signed in via redirect.
           toast({ title: "Signed In", description: "Successfully authenticated." });
           await createUserProfile(result.user);
-          // The onAuthStateChanged listener (in useUser) will pick up the user,
-          // and Effect 1 will handle the redirection. We don't need to do it here.
         }
-        // Whether there was a result or not, we are done processing the redirect.
         setIsProcessingRedirect(false);
       })
       .catch((error) => {
@@ -60,7 +53,6 @@ export default function HomePage() {
         });
         setIsProcessingRedirect(false);
       });
-  // auth is the only dependency needed. We want this to run once when auth is ready.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth]);
 
@@ -77,8 +69,8 @@ export default function HomePage() {
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
-          isAdmin: false, // Default role
-          isTechLead: false, // Default role
+          isAdmin: false, 
+          isTechLead: false, 
         }, { merge: true });
       }
     } catch (error) {
@@ -97,7 +89,7 @@ export default function HomePage() {
       return;
     }
     try {
-        await setPersistence(auth, browserLocalPersistence)
+        await setPersistence(auth, browserLocalPersistence);
         const provider = new GoogleAuthProvider();
         await signInWithRedirect(auth, provider);
     } catch(error: any) {
@@ -105,7 +97,6 @@ export default function HomePage() {
     }
   };
 
-  // Show a loading screen while Firebase is initializing OR processing the redirect result.
   if (isUserLoading || isProcessingRedirect) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -114,8 +105,6 @@ export default function HomePage() {
     );
   }
   
-  // If after all loading, the user is present, show a redirecting message.
-  // The useEffect above will handle the actual redirect.
   if (user) {
     return (
        <div className="flex min-h-screen items-center justify-center bg-background">
@@ -124,7 +113,6 @@ export default function HomePage() {
     )
   }
 
-  // If no user and not loading, show the login page.
   return (
       <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
