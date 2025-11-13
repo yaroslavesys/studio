@@ -42,7 +42,6 @@ export default function HomePage() {
       return;
     }
     
-    // This part only runs on the initial page load after a redirect from Google.
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
@@ -53,9 +52,10 @@ export default function HomePage() {
           await createUserProfile(result.user);
         } else {
             // No redirect result, which is normal on a fresh visit.
-            // We can signal that we're done processing the potential login.
-            if(!user) { // only stop spinner if we are sure there is no user
-                setIsProcessingLogin(false);
+            // We can signal that we're done processing the potential login
+            // if the main user loading is also done.
+            if(!isUserLoading) {
+              setIsProcessingLogin(false);
             }
         }
       })
@@ -68,9 +68,9 @@ export default function HomePage() {
         });
         setIsProcessingLogin(false);
       });
-  // We only want this to run when the auth service is available.
+  // We only want this to run when the auth service is available and user loading changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth]);
+  }, [auth, isUserLoading]);
 
 
   const createUserProfile = async (user: User) => {
