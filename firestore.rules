@@ -34,6 +34,7 @@ service cloud.firestore {
 
     // USERS
     // Users can be created on first login.
+    // Any signed-in user can read any other user's profile (for team views etc).
     // Users can update their own non-critical info.
     // Admins can update anything.
     match /users/{userId} {
@@ -65,15 +66,18 @@ service cloud.firestore {
       
       // A tech lead can see requests for users on their team.
       function isUserOnTechLeadsTeam(userId) {
-        let techLeadTeamId = getUserData(request.auth.uid).teamId;
+        // Use custom claims for the tech lead's teamId for efficiency.
+        let techLeadTeamId = request.auth.token.teamId; 
         let userTeamId = getUserData(userId).teamId;
+        // Check both the claim and that the user being checked belongs to that team.
         return isTechLead() && techLeadTeamId != null && techLeadTeamId == userTeamId;
       }
       
       // Admins can see all requests.
-      // Tech Leads and Users can see requests related to them/their team.
+      // Tech Leads can see requests for their team.
+      // Users can see their own requests.
       allow read: if isSignedIn() && (
-        resource.data.userId == request.auth.uid || 
+        isOwner(resource.data.userId) || 
         isAdmin() ||
         isUserOnTechLeadsTeam(resource.data.userId)
       );
@@ -87,11 +91,12 @@ service cloud.firestore {
     // NOTIFICATIONS
     match /notifications/{notificationId} {
       // Users can read and update (e.g., mark as read) their own notifications.
-      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      // Cloud Functions create notifications, so we check for signed-in state.
+      allow read, update: if isOwner(resource.data.userId);
+      // Cloud Functions will be creating notifications. For simplicity, allow any signed-in user.
+      // In a production app, you might lock this down to a specific service account.
       allow create: if isSignedIn(); 
       // Users can delete their own notifications.
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || isOwner(resource.data.userId);
     }
   }
 }

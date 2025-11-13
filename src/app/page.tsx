@@ -22,54 +22,8 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const [isProcessingRedirect, setIsProcessingRedirect] = useState(true);
-
-  // Effect 1: Redirect already logged-in users
-  useEffect(() => {
-    // If auth is still loading, do nothing.
-    if (isUserLoading) return;
-    
-    // If loading is finished and we have a user, redirect.
-    if (user) {
-      router.push('/dashboard');
-    }
-  }, [user, isUserLoading, router]);
-
-  // Effect 2: Handle the result of a sign-in redirect
-  useEffect(() => {
-    // If auth service isn't ready, we can't process the result.
-    if (!auth) {
-      setIsProcessingRedirect(false); // Stop processing if auth is not available
-      return;
-    }
-
-    // This is the core logic to handle the result from Google Sign-In
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result) {
-          // User has just signed in.
-          toast({ title: "Signed In", description: "Successfully authenticated." });
-          // Create a user profile in Firestore if it doesn't exist.
-          await createUserProfile(result.user);
-          // The user object will be picked up by the useUser() hook,
-          // and Effect 1 will handle the redirect.
-        }
-        // Whether there was a result or not, we are done processing.
-        setIsProcessingRedirect(false);
-      })
-      .catch((error) => {
-        console.error("Redirect Result Error: ", error);
-        toast({
-          variant: "destructive",
-          title: "Sign-in Failed",
-          description: error.message || "An error occurred during sign-in.",
-        });
-        setIsProcessingRedirect(false);
-      });
-  // The 'auth' and 'toast' dependencies are stable. We only want this to run once on mount.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth]);
-
+  // State to manage the sign-in process and UI feedback
+  const [status, setStatus] = useState<'idle' | 'loading' | 'signingIn' | 'redirecting'>('loading');
 
   const createUserProfile = async (user: User) => {
     if (!auth) return;
@@ -96,12 +50,58 @@ export default function HomePage() {
       });
     }
   };
+  
+  // This effect runs once on mount to handle the redirect result.
+  useEffect(() => {
+    if (!auth) return;
+
+    // Set status to loading while we check for redirect result
+    setStatus('loading');
+
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result) {
+          // User has just signed in from a redirect.
+          setStatus('redirecting'); // Show redirecting message
+          toast({ title: "Signed In", description: "Successfully authenticated." });
+          await createUserProfile(result.user);
+          // The useUser hook will pick up the new user state, and the next effect will handle the redirect.
+        } else if (!user && !isUserLoading) {
+          // No redirect result, user is not logged in, and auth is not loading.
+          setStatus('idle'); // Show the sign-in button
+        }
+      })
+      .catch((error) => {
+        console.error("Redirect Result Error: ", error);
+        toast({
+          variant: "destructive",
+          title: "Sign-in Failed",
+          description: error.message || "An error occurred during sign-in.",
+        });
+        setStatus('idle'); // On error, allow user to try again
+      });
+  }, [auth]); // Depends only on the auth service instance.
+
+  // This effect reacts to changes in the user state.
+  useEffect(() => {
+    // If the user object is available, it means login was successful.
+    if (user) {
+      setStatus('redirecting');
+      router.push('/dashboard');
+    }
+    // If auth has loaded and there's no user, we are idle.
+    else if (!isUserLoading) {
+      setStatus('idle');
+    }
+
+  }, [user, isUserLoading, router]);
 
   const handleSignIn = async () => {
     if (!auth) {
       toast({ variant: 'destructive', title: 'Authentication service not ready' });
       return;
     }
+    setStatus('signingIn');
     try {
         // This is CRITICAL: It tells Firebase to remember the user across browser sessions.
         await setPersistence(auth, browserLocalPersistence);
@@ -110,29 +110,20 @@ export default function HomePage() {
         await signInWithRedirect(auth, provider);
     } catch(error: any) {
          toast({ variant: 'destructive', title: 'Sign in failed', description: error.message });
+         setStatus('idle');
     }
   };
   
-  // While we are checking auth state or processing the redirect, show a loading screen.
-  if (isUserLoading || isProcessingRedirect) {
+  // Render based on the current status
+  if (status === 'loading' || status === 'redirecting' || isUserLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p>Loading...</p>
+        <p>{status === 'redirecting' ? 'Redirecting to dashboard...' : 'Loading...'}</p>
       </div>
     );
   }
-  
-  // If user is already logged in, they will be redirected by Effect 1. 
-  // This message is a fallback.
-  if (user) {
-    return (
-       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p>Redirecting to dashboard...</p>
-      </div>
-    )
-  }
 
-  // If no user and not loading, show the sign-in page.
+  // If status is idle and no user, show the sign-in page.
   return (
       <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
@@ -148,8 +139,8 @@ export default function HomePage() {
           </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-          <Button onClick={handleSignIn} disabled={isProcessingRedirect}>
-              Sign in with Google
+          <Button onClick={handleSignIn} disabled={status === 'signingIn'}>
+             {status === 'signingIn' ? 'Redirecting to Google...' : 'Sign in with Google'}
           </Button>
           </CardContent>
       </Card>
