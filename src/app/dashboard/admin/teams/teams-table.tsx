@@ -5,6 +5,8 @@ import {
   collection,
   doc,
   writeBatch,
+  addDoc,
+  updateDoc
 } from 'firebase/firestore';
 import { useCollection, useFirestore, useMemoFirebase, useFunctions } from '@/firebase';
 import {
@@ -67,7 +69,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Service } from '@/lib/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { deleteDoc, addDoc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 

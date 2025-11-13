@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, User, getRedirectResult, signInWithRedirect } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,14 +22,38 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(true); // Start as true
+
+  // Effect to handle redirect result
+  useEffect(() => {
+    if (!auth) return;
+
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result) {
+          toast({ title: 'Вход выполнен', description: 'Создание профиля...' });
+          await createUserProfile(result.user);
+          // The main useEffect will handle the redirect to /dashboard
+        }
+        // If there's no result, it means the user just landed on the page
+        // without coming from a redirect. In this case, we stop loading.
+        setIsSigningIn(false);
+      })
+      .catch((error) => {
+        console.error('[handleRedirectResult] Error:', error);
+        toast({ variant: 'destructive', title: 'Ошибка входа', description: error.message });
+        setIsSigningIn(false);
+      });
+  }, [auth]);
+
 
   // Effect to redirect user if already logged in
   useEffect(() => {
-    if (user && !isUserLoading) {
+    // Wait until the user loading is complete and the redirect check is done
+    if (user && !isUserLoading && !isSigningIn) {
       router.push('/dashboard');
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, isSigningIn, router]);
 
   const createUserProfile = async (user: User) => {
     if (!auth) return;
@@ -57,6 +81,7 @@ export default function HomePage() {
           photoURL: user.photoURL,
           isAdmin: false,
           isTechLead: false,
+          teamId: null, // Explicitly set teamId to null
         };
         await setDoc(userDocRef, newUserProfile);
         toast({ title: "Профиль создан", description: "Добро пожаловать!" });
@@ -79,29 +104,11 @@ export default function HomePage() {
 
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
-
-    try {
-      const result = await signInWithPopup(auth, provider);
-      await createUserProfile(result.user);
-      // The useEffect will handle the redirect
-    } catch (error: any) {
-      // Handle known errors cleanly
-      if (error.code === 'auth/popup-closed-by-user') {
-         toast({
-          variant: "default",
-          title: "Вход отменен",
-          description: "Вы закрыли окно входа.",
-        });
-      } else {
-        console.error('[handleSignIn] Error:', error);
-        toast({ variant: 'destructive', title: 'Ошибка входа', description: error.message });
-      }
-    } finally {
-      setIsSigningIn(false);
-    }
+    // We use signInWithRedirect now
+    signInWithRedirect(auth, provider);
   };
 
-  // Show a loading screen while Firebase is initializing or if a user is being signed in
+  // Show a loading screen while Firebase is initializing or if a sign-in is in progress
   if (isUserLoading || isSigningIn) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -142,3 +149,5 @@ export default function HomePage() {
       </div>
   );
 }
+
+    
