@@ -12,6 +12,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 
+
 // This is the only place you should initialize the Admin SDK
 admin.initializeApp();
 
@@ -60,6 +61,7 @@ export const setCustomClaims = onCall(async (request) => {
   if (claims.isTechLead === false && claims.teamId) {
     claims.teamId = null;
   }
+
 
   try {
     // 3. Use the Admin SDK to set the custom claims on the target user.
