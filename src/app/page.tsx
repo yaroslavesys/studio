@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, User, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -96,8 +96,13 @@ export default function HomePage() {
       toast({ variant: 'destructive', title: 'Authentication service not ready' });
       return;
     }
-    const provider = new GoogleAuthProvider();
-    await signInWithRedirect(auth, provider);
+    try {
+        await setPersistence(auth, browserLocalPersistence)
+        const provider = new GoogleAuthProvider();
+        await signInWithRedirect(auth, provider);
+    } catch(error: any) {
+         toast({ variant: 'destructive', title: 'Sign in failed', description: error.message });
+    }
   };
 
   // Show a loading screen while Firebase is initializing OR processing the redirect result.

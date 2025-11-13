@@ -2,7 +2,7 @@
 
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 
@@ -37,10 +37,6 @@ export function getSdks(firebaseApp: FirebaseApp) {
   const firestore = getFirestore(firebaseApp);
   const auth = getAuth(firebaseApp);
   const functions = getFunctions(firebaseApp);
-  
-  // Use browserLocalPersistence to ensure auth state is saved across page loads,
-  // which is crucial for signInWithRedirect to work correctly.
-  setPersistence(auth, browserLocalPersistence);
   
   return {
     firebaseApp,
