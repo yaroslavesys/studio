@@ -17,21 +17,21 @@ export default function DashboardLayout({
   const { user, isUserLoading } = useUser();
   const router = useRouter();
   const pathname = usePathname();
-  const [isCheckingRole, setIsCheckingRole] = useState(true);
+  const [hasCheckedRole, setHasCheckedRole] = useState(false);
 
   useEffect(() => {
-    // If Firebase is still checking the user, we wait.
+    // Wait until Firebase has finished its initial user check.
     if (isUserLoading) {
-      return;
+      return; // Do nothing, wait for loading to finish.
     }
 
-    // If loading is done and there is no user, redirect to login.
+    // If loading is done and there's no user, redirect to the login page.
     if (!user) {
       router.replace('/');
       return;
     }
-
-    // If we have a user, check their role from the ID token.
+    
+    // If we have a user, check their roles.
     const checkUserRole = async () => {
       // Force a refresh of the ID token to get the latest custom claims.
       const idTokenResult = await user.getIdTokenResult(true);
@@ -49,7 +49,7 @@ export default function DashboardLayout({
       }
       
       // Role check is complete, we can show the content.
-      setIsCheckingRole(false);
+      setHasCheckedRole(true);
     };
 
     checkUserRole();
@@ -57,20 +57,10 @@ export default function DashboardLayout({
   }, [user, isUserLoading, router, pathname]);
 
   // While Firebase is loading OR we are checking the role, show a loading screen.
-  if (isUserLoading || isCheckingRole) {
+  if (isUserLoading || !hasCheckedRole) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p>Verifying user role...</p>
-      </div>
-    );
-  }
-  
-  // If loading is done and there's still no user, show a redirecting message.
-  // The useEffect above should have already started the redirect.
-  if (!user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p>Redirecting to login...</p>
       </div>
     );
   }

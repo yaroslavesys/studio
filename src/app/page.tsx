@@ -21,43 +21,35 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const [isProcessingLogin, setIsProcessingLogin] = useState(true);
+  // This state tracks the redirect processing specifically.
+  const [isProcessingRedirect, setIsProcessingRedirect] = useState(true);
 
-  // Effect 1: Handle user redirection
+  // Effect 1: Handle redirection *after* auth state is confirmed.
   useEffect(() => {
-    // If loading is finished and we have a user, go to the dashboard.
+    // If auth is not loading and we have a user, redirect.
     if (!isUserLoading && user) {
       router.push('/dashboard');
     }
-    // If loading is finished and there's no user, stop the loading spinner
-    // on this page so the login button can be shown.
-    if (!isUserLoading && !user) {
-        setIsProcessingLogin(false);
-    }
   }, [user, isUserLoading, router]);
 
-  // Effect 2: Handle the result from a redirect sign-in flow
+  // Effect 2: Handle the result from a redirect sign-in flow. This runs once.
   useEffect(() => {
     if (!auth) {
-      return;
+        setIsProcessingRedirect(false);
+        return;
     }
-    
+
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
           // User has successfully signed in via redirect.
-          // The `onAuthStateChanged` listener will pick up the user,
-          // and Effect 1 will handle the redirection.
-          toast({ title: "Signed In", description: "Successfully authenticated."});
+          toast({ title: "Signed In", description: "Successfully authenticated." });
           await createUserProfile(result.user);
-        } else {
-            // No redirect result, which is normal on a fresh visit.
-            // We can signal that we're done processing the potential login
-            // if the main user loading is also done.
-            if(!isUserLoading) {
-              setIsProcessingLogin(false);
-            }
+          // The onAuthStateChanged listener will pick up the user,
+          // and Effect 1 will handle the redirection. We don't need to do it here.
         }
+        // Whether there was a result or not, we are done processing the redirect.
+        setIsProcessingRedirect(false);
       })
       .catch((error) => {
         console.error("Redirect Result Error: ", error);
@@ -66,11 +58,11 @@ export default function HomePage() {
           title: "Sign-in Failed",
           description: error.message || "An error occurred during sign-in.",
         });
-        setIsProcessingLogin(false);
+        setIsProcessingRedirect(false);
       });
-  // We only want this to run when the auth service is available and user loading changes.
+  // auth is the only dependency needed. We want this to run once when auth is ready.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth, isUserLoading]);
+  }, [auth]);
 
 
   const createUserProfile = async (user: User) => {
@@ -104,13 +96,12 @@ export default function HomePage() {
       toast({ variant: 'destructive', title: 'Authentication service not ready' });
       return;
     }
-    setIsProcessingLogin(true);
     const provider = new GoogleAuthProvider();
     await signInWithRedirect(auth, provider);
   };
 
-
-  if (isUserLoading || isProcessingLogin) {
+  // Show a loading screen while Firebase is initializing OR processing the redirect result.
+  if (isUserLoading || isProcessingRedirect) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p>Loading...</p>
@@ -118,6 +109,8 @@ export default function HomePage() {
     );
   }
   
+  // If after all loading, the user is present, show a redirecting message.
+  // The useEffect above will handle the actual redirect.
   if (user) {
     return (
        <div className="flex min-h-screen items-center justify-center bg-background">
@@ -126,7 +119,7 @@ export default function HomePage() {
     )
   }
 
-
+  // If no user and not loading, show the login page.
   return (
       <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
@@ -142,7 +135,7 @@ export default function HomePage() {
           </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-          <Button onClick={handleSignIn} disabled={isProcessingLogin}>
+          <Button onClick={handleSignIn} disabled={isProcessingRedirect}>
               Sign in with Google
           </Button>
           </CardContent>
