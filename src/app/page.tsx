@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,14 +22,45 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(true); // Start as true to handle redirect
 
-  // Redirect if user is already logged in
+  // Handle redirect result on component mount
   useEffect(() => {
-    if (!isUserLoading && user) {
+    if (!auth) {
+        setIsProcessing(false);
+        return;
+    };
+
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result && result.user) {
+          // User has successfully signed in.
+          const loggedInUser = result.user;
+          await createUserProfile(loggedInUser);
+          await loggedInUser.getIdToken(true);
+          router.push('/dashboard');
+        } else {
+          // No redirect result, probably a direct page load
+          setIsProcessing(false);
+        }
+      })
+      .catch((error) => {
+        console.error("Authentication error on redirect: ", error);
+        toast({
+          variant: "destructive",
+          title: "Sign-in Failed",
+          description: error.message || "An unexpected error occurred during sign-in.",
+        });
+        setIsProcessing(false);
+      });
+  }, [auth, router, toast]);
+
+  // Redirect if user is already logged in and not processing a redirect
+  useEffect(() => {
+    if (!isUserLoading && !isProcessing && user) {
       router.push('/dashboard');
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, isProcessing, router]);
 
   const handleSignIn = async () => {
     if (!auth) {
@@ -42,24 +73,8 @@ export default function HomePage() {
     }
     setIsProcessing(true);
     const provider = new GoogleAuthProvider();
-
-    try {
-        const result = await signInWithPopup(auth, provider);
-        const loggedInUser = result.user;
-        await createUserProfile(loggedInUser);
-        // Force token refresh to get custom claims on the first login.
-        await loggedInUser.getIdToken(true); 
-        router.push('/dashboard');
-    } catch (error: any) {
-        console.error("Authentication error: ", error);
-        toast({
-            variant: "destructive",
-            title: "Sign-in Failed",
-            description: error.message || "An unexpected error occurred during sign-in.",
-        });
-    } finally {
-        setIsProcessing(false);
-    }
+    // This will redirect the user to the Google sign-in page
+    await signInWithRedirect(auth, provider);
   };
 
   const createUserProfile = async (user: User) => {
