@@ -29,23 +29,36 @@ service cloud.firestore {
     function getUserData(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data;
     }
+    
+    // Function to check if a user is on a Tech Lead's team.
+    // This is a crucial function for many subsequent rules.
+    function isUserOnTechLeadsTeam(userId) {
+      // Use custom claims for the tech lead's teamId for efficiency.
+      let techLeadTeamId = request.auth.token.teamId; 
+      // We must read the user's document to see which team they are on.
+      let userTeamId = getUserData(userId).teamId;
+      // Check that the caller is a tech lead, has a team, and the user being checked belongs to that same team.
+      return isTechLead() && techLeadTeamId != null && techLeadTeamId == userTeamId;
+    }
+
 
     // --- Security Rules for Collections ---
 
     // USERS
-    // Users can be created on first login.
-    // Any signed-in user can read any other user's profile (for team views etc).
+    // Admins can read all user profiles.
+    // Tech Leads can read profiles of their team members.
+    // Any signed-in user can read any other user's profile for general UI purposes (e.g., seeing names).
     // Users can update their own non-critical info.
     // Admins can update anything.
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn(); // Simplified: any signed-in user can read profiles. Secure sensitive data if needed.
       allow create: if isOwner(userId);
       allow update: if isAdmin() || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL']));
       allow delete: if isAdmin();
     }
     
     // TEAMS, SERVICES, CONTACTS
-    // These collections are managed only by administrators.
+    // These collections are managed only by administrators, but read by all signed-in users.
     match /teams/{teamId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -64,23 +77,13 @@ service cloud.firestore {
       // A user can create a request for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
-      // A tech lead can see requests for users on their team.
-      function isUserOnTechLeadsTeam(userId) {
-        // Use custom claims for the tech lead's teamId for efficiency.
-        let techLeadTeamId = request.auth.token.teamId; 
-        // We must read the user's document to see which team they are on.
-        let userTeamId = getUserData(userId).teamId;
-        // Check that the caller is a tech lead, has a team, and the user being checked belongs to that same team.
-        return isTechLead() && techLeadTeamId != null && techLeadTeamId == userTeamId;
-      }
-      
       // Admins can see all requests.
       // Tech Leads can see requests for their team.
       // Users can see their own requests.
       allow read: if isSignedIn() && (
         isOwner(resource.data.userId) || 
         isAdmin() ||
-        (isTechLead() && isUserOnTechLeadsTeam(resource.data.userId))
+        isUserOnTechLeadsTeam(resource.data.userId)
       );
 
       // Admins and the user's Tech Lead can update a request (approve/reject).
