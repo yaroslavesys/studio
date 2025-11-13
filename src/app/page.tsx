@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,45 +21,48 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(true); // Start as true to handle redirect
 
-  // Redirect if user is already logged in
+  // Effect to handle redirect result on page load
   useEffect(() => {
-    if (!isUserLoading && user) {
-      router.push('/dashboard');
-    }
-  }, [user, isUserLoading, router]);
-
-  const handleSignIn = async () => {
-    if (!auth) {
-      toast({
-        variant: 'destructive',
-        title: 'Authentication service not ready',
-        description: 'Please try again in a moment.',
-      });
+    if (!auth || isUserLoading) {
+      // If user is already loaded, no need to check for redirect
+      if(!isUserLoading && user) {
+        router.push('/dashboard');
+      }
       return;
-    }
-    setIsProcessing(true);
-    const provider = new GoogleAuthProvider();
-
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const loggedInUser = result.user;
-      await createUserProfile(loggedInUser);
-      // Force a token refresh to ensure custom claims are loaded if they exist
-      await loggedInUser.getIdToken(true); 
-      router.push('/dashboard');
-    } catch (error: any) {
-      console.error("Authentication error: ", error);
-      toast({
-        variant: "destructive",
-        title: "Sign-in Failed",
-        description: error.message || "An unexpected error occurred during sign-in.",
-      });
-    } finally {
+    };
+    
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result) {
+          // User has successfully signed in via redirect.
+          await createUserProfile(result.user);
+          await result.user.getIdToken(true);
+          router.push('/dashboard');
+        } else {
+          // No redirect result, so stop processing.
+          // If a user is already logged in (from a previous session), redirect them.
+          if (user) {
+            router.push('/dashboard');
+          } else {
+             setIsProcessing(false);
+          }
+        }
+      })
+      .catch((error) => {
+        console.error("Redirect Result Error: ", error);
+        toast({
+          variant: "destructive",
+          title: "Sign-in Failed",
+          description: error.message || "An error occurred during sign-in.",
+        });
         setIsProcessing(false);
-    }
-  };
+      });
+      
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth, isUserLoading]);
+
 
   const createUserProfile = async (user: User) => {
     const firestore = getFirestore();
@@ -79,16 +81,53 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error("Error creating user profile:", error);
+      // This toast might not be visible if a redirect happens immediately
       toast({
         variant: "destructive",
         title: "Profile Error",
-        description: "Could not create your user profile after sign-in.",
+        description: "Could not create or verify your user profile.",
       });
     }
   };
 
-  // Show a loading indicator while checking auth state.
-  if (isUserLoading) {
+  const handleSignIn = async () => {
+    if (!auth) {
+      toast({
+        variant: 'destructive',
+        title: 'Authentication service not ready',
+        description: 'Please try again in a moment.',
+      });
+      return;
+    }
+    setIsProcessing(true);
+    const provider = new GoogleAuthProvider();
+
+    try {
+      // First, try to sign in with a popup
+      const result = await signInWithPopup(auth, provider);
+      await createUserProfile(result.user);
+      await result.user.getIdToken(true);
+      router.push('/dashboard');
+    } catch (error: any) {
+      // If popup fails (e.g., blocked), fall back to redirect
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        console.log('Popup failed, falling back to redirect...');
+        await signInWithRedirect(auth, provider);
+      } else {
+         console.error("Authentication error: ", error);
+         toast({
+            variant: "destructive",
+            title: "Sign-in Failed",
+            description: error.message || "An unexpected error occurred during sign-in.",
+        });
+        setIsProcessing(false);
+      }
+    }
+  };
+
+
+  // Show a loading indicator while checking auth state or processing sign-in.
+  if (isUserLoading || isProcessing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p>Loading...</p>
