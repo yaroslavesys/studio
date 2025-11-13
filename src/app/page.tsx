@@ -22,11 +22,60 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  // State to manage the sign-in process and UI feedback
-  const [status, setStatus] = useState<'idle' | 'loading' | 'signingIn' | 'redirecting'>('loading');
+  const [status, setStatus] = useState<'loading' | 'signingIn' | 'redirecting' | 'idle'>('loading');
+
+  useEffect(() => {
+    if (isUserLoading) {
+      return; 
+    }
+    if (user) {
+      setStatus('redirecting');
+      router.push('/dashboard');
+    } else {
+      setStatus('idle');
+    }
+  }, [user, isUserLoading, router]);
+
+  useEffect(() => {
+    if (!auth) return;
+
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result) {
+          setStatus('redirecting');
+          toast({ title: "Signed In", description: "Успешная аутентификация. Создание профиля..." });
+          await createUserProfile(result.user);
+          // The useUser hook will update and the first useEffect will handle the redirect.
+        }
+      })
+      .catch((error) => {
+        console.error("Redirect Result Error: ", error);
+        toast({
+          variant: "destructive",
+          title: "Sign-in Failed",
+          description: error.message || "Произошла ошибка во время входа.",
+        });
+        setStatus('idle');
+      });
+  }, [auth]);
 
   const createUserProfile = async (user: User) => {
     if (!auth) return;
+
+    // --- ЭТО ФИНАЛЬНЫЙ ФИКС ---
+    // Если по какой-то причине аккаунт Google не вернул email,
+    // мы не можем создать профиль и должны остановить процесс.
+    if (!user.email) {
+      console.error("CRITICAL: User object is missing email. Cannot create profile.", user);
+      toast({
+          variant: "destructive",
+          title: "Ошибка создания профиля",
+          description: "Ваш аккаунт Google не предоставил email. Вход невозможен.",
+      });
+      // Предотвращаем дальнейшее выполнение, чтобы избежать ошибок
+      return;
+    }
+    
     const firestore = getFirestore(auth.app);
     const userDocRef = doc(firestore, 'users', user.uid);
     try {
@@ -46,67 +95,20 @@ export default function HomePage() {
       toast({
         variant: "destructive",
         title: "Profile Error",
-        description: "Could not create or verify your user profile.",
+        description: "Не удалось создать или проверить ваш профиль пользователя.",
       });
     }
   };
-  
-  // This effect runs once on mount to handle the redirect result.
-  useEffect(() => {
-    if (!auth) return;
-
-    // Set status to loading while we check for redirect result
-    setStatus('loading');
-
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result) {
-          // User has just signed in from a redirect.
-          setStatus('redirecting'); // Show redirecting message
-          toast({ title: "Signed In", description: "Successfully authenticated." });
-          await createUserProfile(result.user);
-          // The useUser hook will pick up the new user state, and the next effect will handle the redirect.
-        } else if (!user && !isUserLoading) {
-          // No redirect result, user is not logged in, and auth is not loading.
-          setStatus('idle'); // Show the sign-in button
-        }
-      })
-      .catch((error) => {
-        console.error("Redirect Result Error: ", error);
-        toast({
-          variant: "destructive",
-          title: "Sign-in Failed",
-          description: error.message || "An error occurred during sign-in.",
-        });
-        setStatus('idle'); // On error, allow user to try again
-      });
-  }, [auth]); // Depends only on the auth service instance.
-
-  // This effect reacts to changes in the user state.
-  useEffect(() => {
-    // If the user object is available, it means login was successful.
-    if (user) {
-      setStatus('redirecting');
-      router.push('/dashboard');
-    }
-    // If auth has loaded and there's no user, we are idle.
-    else if (!isUserLoading) {
-      setStatus('idle');
-    }
-
-  }, [user, isUserLoading, router]);
 
   const handleSignIn = async () => {
     if (!auth) {
-      toast({ variant: 'destructive', title: 'Authentication service not ready' });
+      toast({ variant: 'destructive', title: 'Сервис аутентификации не готов' });
       return;
     }
     setStatus('signingIn');
     try {
-        // This is CRITICAL: It tells Firebase to remember the user across browser sessions.
         await setPersistence(auth, browserLocalPersistence);
         const provider = new GoogleAuthProvider();
-        // Start the sign-in process. The user will be redirected to Google and then back.
         await signInWithRedirect(auth, provider);
     } catch(error: any) {
          toast({ variant: 'destructive', title: 'Sign in failed', description: error.message });
@@ -114,16 +116,14 @@ export default function HomePage() {
     }
   };
   
-  // Render based on the current status
   if (status === 'loading' || status === 'redirecting' || isUserLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p>{status === 'redirecting' ? 'Redirecting to dashboard...' : 'Loading...'}</p>
+        <p>{status === 'redirecting' ? 'Перенаправление на дашборд...' : 'Загрузка...'}</p>
       </div>
     );
   }
 
-  // If status is idle and no user, show the sign-in page.
   return (
       <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
@@ -135,12 +135,12 @@ export default function HomePage() {
               Welcome to Devils access
           </CardTitle>
           <CardDescription className="pt-1">
-              Sign in to access your dashboard.
+              Войдите, чтобы получить доступ к своей панели управления.
           </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
           <Button onClick={handleSignIn} disabled={status === 'signingIn'}>
-             {status === 'signingIn' ? 'Redirecting to Google...' : 'Sign in with Google'}
+             {status === 'signingIn' ? 'Перенаправление в Google...' : 'Войти с помощью Google'}
           </Button>
           </CardContent>
       </Card>
