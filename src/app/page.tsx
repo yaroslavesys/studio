@@ -22,25 +22,19 @@ export default function HomePage() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(true);
-  const [isInIframe, setIsInIframe] = useState(false);
 
+  // This effect handles the result from a redirect sign-in flow
   useEffect(() => {
-    // Эта проверка определит, находимся ли мы в iframe.
-    // Она выполнится только на клиенте, избегая ошибок гидратации.
-    setIsInIframe(window.self !== window.top);
-  }, []);
-
-  // Эффект для обработки результата редиректа
-  useEffect(() => {
-    if (!auth || user) {
-        if(user) {
-            router.push('/dashboard');
-        } else {
-             setIsProcessing(false);
-        }
+    if (!auth) {
+      setIsProcessing(false);
       return;
     }
-    
+    // If a user is already logged in, redirect them.
+    if (user) {
+      router.push('/dashboard');
+      return;
+    }
+
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
@@ -54,11 +48,13 @@ export default function HomePage() {
       })
       .catch((error) => {
         console.error("Redirect Result Error: ", error);
-        toast({
-          variant: "destructive",
-          title: "Sign-in Failed",
-          description: error.message || "An error occurred during sign-in.",
-        });
+        if (error.code !== 'auth/web-storage-unsupported') {
+            toast({
+              variant: "destructive",
+              title: "Sign-in Failed",
+              description: error.message || "An error occurred during sign-in.",
+            });
+        }
         setIsProcessing(false);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,27 +94,9 @@ export default function HomePage() {
     setIsProcessing(true);
     const provider = new GoogleAuthProvider();
 
-    if (isInIframe) {
-      // Для iframe мы используем signInWithRedirect, так как это самый надежный способ,
-      // который не блокируется браузерами. Он перезагрузит весь фрейм.
-      await signInWithRedirect(auth, provider);
-    } else {
-      // Для обычного окна используем signInWithPopup
-      try {
-        const result = await signInWithPopup(auth, provider);
-        toast({ title: "Signed In", description: "Successfully authenticated."});
-        await createUserProfile(result.user);
-        await result.user.getIdToken(true);
-        router.push('/dashboard');
-      } catch (error: any) {
-         toast({
-          variant: "destructive",
-          title: "Sign-in Failed",
-          description: error.message || "An error occurred during sign-in.",
-        });
-        setIsProcessing(false);
-      }
-    }
+    // The ONLY reliable way to sign in within restrictive iframes (like Studio/Previews)
+    // is to trigger a full-page redirect. We use signInWithRedirect for this.
+    await signInWithRedirect(auth, provider);
   };
 
 
@@ -130,7 +108,7 @@ export default function HomePage() {
     );
   }
 
-  // Если не загружаемся и нет пользователя, показать страницу входа
+  // If not loading and no user, show the login page
   if (!user) {
     return (
         <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
@@ -156,7 +134,7 @@ export default function HomePage() {
     );
   }
 
-  // Если пользователь уже вошел, можно просто показать загрузку или null перед редиректом
+  // Fallback for when user is loaded but redirect hasn't happened yet
   return (
      <div className="flex min-h-screen items-center justify-center bg-background">
         <p>Redirecting to dashboard...</p>
