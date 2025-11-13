@@ -370,7 +370,14 @@ export function TeamsTable() {
       if (techLeadId) {
         const techLeadUser = usersData?.find(u => u.uid === techLeadId);
         if (techLeadUser) {
-           await setCustomClaims({ uid: techLeadId, claims: { isTechLead: false, teamId: null, isAdmin: !!techLeadUser.isAdmin } });
+           await setCustomClaims({ 
+             uid: techLeadId, 
+             claims: { 
+               isTechLead: false, 
+               teamId: null, 
+               isAdmin: !!techLeadUser.isAdmin 
+              } 
+            });
         }
       }
       
