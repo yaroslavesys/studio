@@ -351,7 +351,7 @@ export function TeamsTable() {
   };
 
   const handleDeleteRequest = (team: Team) => {
-    setTeamToDelete(contact);
+    setTeamToDelete(team);
   };
 
 
