@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,33 +21,30 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const [isProcessing, setIsProcessing] = useState(true); // Start as true to handle redirect
+  const [isProcessing, setIsProcessing] = useState(true); // Start as true to handle redirect result
 
   // Effect to handle redirect result on page load
   useEffect(() => {
-    if (!auth || isUserLoading) {
-      // If user is already loaded, no need to check for redirect
-      if(!isUserLoading && user) {
-        router.push('/dashboard');
-      }
+    if (!auth) return;
+
+    // If user is already loaded from a previous session, just redirect.
+    if (user) {
+      router.push('/dashboard');
       return;
-    };
+    }
     
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
           // User has successfully signed in via redirect.
+          toast({ title: "Signed In", description: "Successfully authenticated."});
           await createUserProfile(result.user);
-          await result.user.getIdToken(true);
+          await result.user.getIdToken(true); // Refresh token to get custom claims
           router.push('/dashboard');
         } else {
-          // No redirect result, so stop processing.
-          // If a user is already logged in (from a previous session), redirect them.
-          if (user) {
-            router.push('/dashboard');
-          } else {
-             setIsProcessing(false);
-          }
+          // No redirect result, user is not logged in.
+          // Stop the loading indicator.
+          setIsProcessing(false);
         }
       })
       .catch((error) => {
@@ -60,8 +57,9 @@ export default function HomePage() {
         setIsProcessing(false);
       });
       
+  // This effect should only run once on component mount with the auth instance.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth, isUserLoading]);
+  }, [auth]);
 
 
   const createUserProfile = async (user: User) => {
@@ -81,7 +79,6 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error("Error creating user profile:", error);
-      // This toast might not be visible if a redirect happens immediately
       toast({
         variant: "destructive",
         title: "Profile Error",
@@ -101,28 +98,8 @@ export default function HomePage() {
     }
     setIsProcessing(true);
     const provider = new GoogleAuthProvider();
-
-    try {
-      // First, try to sign in with a popup
-      const result = await signInWithPopup(auth, provider);
-      await createUserProfile(result.user);
-      await result.user.getIdToken(true);
-      router.push('/dashboard');
-    } catch (error: any) {
-      // If popup fails (e.g., blocked), fall back to redirect
-      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-        console.log('Popup failed, falling back to redirect...');
-        await signInWithRedirect(auth, provider);
-      } else {
-         console.error("Authentication error: ", error);
-         toast({
-            variant: "destructive",
-            title: "Sign-in Failed",
-            description: error.message || "An unexpected error occurred during sign-in.",
-        });
-        setIsProcessing(false);
-      }
-    }
+    // Use signInWithRedirect for a robust flow that works everywhere
+    await signInWithRedirect(auth, provider);
   };
 
 
