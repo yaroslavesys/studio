@@ -49,26 +49,26 @@ export const setCustomClaims = onCall(async (request) => {
 
   // **CRITICAL VALIDATION LOGIC**
   // A tech lead MUST be assigned to a team.
-  // If we try to make someone a tech lead, their claims MUST include a teamId.
   if (claims.isTechLead === true && !claims.teamId) {
      throw new HttpsError(
       "failed-precondition",
       "A user cannot be a Tech Lead without being assigned to a team."
     );
   }
-
-  // If a user is NOT a tech lead, ensure their teamId claim is also removed for consistency.
-  if (claims.isTechLead === false && claims.teamId) {
-    claims.teamId = null;
-  }
+  
+  // Sanitize claims: ensure teamId is null if user is not a tech lead.
+  const finalClaims = {
+    ...claims,
+    teamId: claims.isTechLead ? claims.teamId : null,
+  };
 
 
   try {
     // 3. Use the Admin SDK to set the custom claims on the target user.
     // This action is privileged and can only be done on the server.
-    await admin.auth().setCustomUserClaims(uid, claims);
+    await admin.auth().setCustomUserClaims(uid, finalClaims);
 
-    logger.info(`Successfully set claims for user ${uid}`, { claims });
+    logger.info(`Successfully set claims for user ${uid}`, { claims: finalClaims });
 
     // 4. Return a success message to the client.
     return {

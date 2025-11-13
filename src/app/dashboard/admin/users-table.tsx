@@ -115,9 +115,15 @@ function EditUserForm({
     if (!firestore || !functions) return;
     const userDocRef = doc(firestore, 'users', user.uid);
     
-    // This data is for display purposes in the Firestore DB
+    let teamIdForUpdate = values.teamId === 'none' || values.teamId === '' ? null : values.teamId;
+
+    // If the user is no longer a tech lead, ensure their teamId is also removed.
+    if (!values.isTechLead) {
+        teamIdForUpdate = null;
+    }
+
     const displayUpdateData: any = { 
-        teamId: values.teamId === 'none' || values.teamId === '' ? null : values.teamId,
+        teamId: teamIdForUpdate,
         isAdmin: values.isAdmin,
         isTechLead: values.isTechLead,
     };
@@ -126,21 +132,16 @@ function EditUserForm({
     const claimsUpdateData = {
         isAdmin: values.isAdmin,
         isTechLead: values.isTechLead,
-        // We also add the teamId to the token to make security rules more efficient
         teamId: displayUpdateData.teamId, 
     }
 
     try {
-        // This is the critical part: Call the cloud function to set custom claims
-        // This makes the ID token the source of truth for security rules.
         const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
         await setCustomClaims({ 
             uid: user.uid, 
             claims: claimsUpdateData
         });
         
-        // After successfully setting claims, update the Firestore document
-        // for display purposes. The security rules will rely on the claims.
         await updateDoc(userDocRef, displayUpdateData);
 
         toast({
@@ -153,7 +154,6 @@ function EditUserForm({
     } catch(error: any) {
         console.error("Error updating user or setting claims:", error);
         
-        // If it's a Firestore permission error, use our custom handler
         if (error.code === 'permission-denied' && error.details?.path) {
              const permissionError = new FirestorePermissionError({
                 path: error.details.path,

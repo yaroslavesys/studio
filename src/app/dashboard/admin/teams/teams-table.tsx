@@ -1,3 +1,4 @@
+
 'use client';
 import { useMemo, useState } from 'react';
 import {
@@ -83,7 +84,7 @@ interface UserProfile {
 interface Team {
   id: string;
   name: string;
-  techLeadId: string;
+  techLeadId?: string;
   availableServiceIds?: string[];
 }
 
@@ -92,7 +93,7 @@ const teamFormSchema = z.object({
   name: z.string().min(2, {
     message: 'Team name must be at least 2 characters.',
   }),
-  techLeadId: z.string().min(1, { message: 'You must select a tech lead.' }),
+  techLeadId: z.string().optional(),
   availableServiceIds: z.array(z.string()).default([]),
 });
 
@@ -126,17 +127,24 @@ function TeamForm({
   const onSubmit = async (values: z.infer<typeof teamFormSchema>) => {
     if (!firestore) return;
     const batch = writeBatch(firestore);
-    const newTechLeadId = values.techLeadId;
+    const newTechLeadId = values.techLeadId === 'none' ? undefined : values.techLeadId;
     const previousTechLeadId = team?.techLeadId;
+
+    const finalValues = {
+        ...values,
+        techLeadId: newTechLeadId,
+    }
 
     try {
       if (isEditing) {
         const teamDocRef = doc(firestore, 'teams', team.id);
-        batch.update(teamDocRef, values);
+        batch.update(teamDocRef, finalValues);
 
         if (newTechLeadId !== previousTechLeadId) {
-          const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
-          batch.update(newTechLeadRef, { isTechLead: true });
+          if (newTechLeadId) {
+            const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
+            batch.update(newTechLeadRef, { isTechLead: true, teamId: team.id });
+          }
 
           if (previousTechLeadId) {
             const otherTeamsLed = teams.filter(
@@ -145,7 +153,7 @@ function TeamForm({
             );
             if (otherTeamsLed.length === 0) {
               const previousTechLeadRef = doc(firestore, 'users', previousTechLeadId);
-              batch.update(previousTechLeadRef, { isTechLead: false });
+              batch.update(previousTechLeadRef, { isTechLead: false, teamId: null });
             }
           }
         }
@@ -153,7 +161,7 @@ function TeamForm({
            const permissionError = new FirestorePermissionError({
             path: teamDocRef.path,
             operation: 'update',
-            requestResourceData: values,
+            requestResourceData: finalValues,
           });
           errorEmitter.emit('permission-error', permissionError);
         });
@@ -164,16 +172,18 @@ function TeamForm({
         const teamsCollectionRef = collection(firestore, 'teams');
         const newTeamRef = doc(teamsCollectionRef);
         
-        batch.set(newTeamRef, values);
+        batch.set(newTeamRef, finalValues);
 
-        const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
-        batch.update(newTechLeadRef, { isTechLead: true });
+        if (newTechLeadId) {
+            const newTechLeadRef = doc(firestore, 'users', newTechLeadId);
+            batch.update(newTechLeadRef, { isTechLead: true, teamId: newTeamRef.id });
+        }
         
         await batch.commit().catch(async () => {
             const permissionError = new FirestorePermissionError({
             path: teamsCollectionRef.path,
             operation: 'create',
-            requestResourceData: values,
+            requestResourceData: finalValues,
           });
           errorEmitter.emit('permission-error', permissionError);
         });
@@ -216,7 +226,7 @@ function TeamForm({
             name="techLeadId"
             render={({ field }) => (
                 <FormItem>
-                <FormLabel>Tech Lead</FormLabel>
+                <FormLabel>Tech Lead (Optional)</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                     <SelectTrigger>
@@ -224,6 +234,7 @@ function TeamForm({
                     </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                    <SelectItem value="none">No Tech Lead</SelectItem>
                     {availableTechLeads.map((user) => (
                         <SelectItem key={user.uid} value={user.uid}>
                         {user.displayName} ({user.email})
@@ -361,17 +372,22 @@ export function TeamsTable() {
       const teamDocRef = doc(firestore, 'teams', teamToDelete.id);
       batch.delete(teamDocRef);
 
-      // 2. Check if the tech lead is a lead of any other team
+      // 2. If the team had a tech lead, handle their demotion.
       const techLeadId = teamToDelete.techLeadId;
-      const otherTeamsLed = teams.filter(
-        (t) => t.techLeadId === techLeadId && t.id !== teamToDelete.id
-      );
+      if (techLeadId) {
+        // Check if the tech lead is a lead of any OTHER team
+        const otherTeamsLed = teams.filter(
+            (t) => t.techLeadId === techLeadId && t.id !== teamToDelete.id
+        );
 
-      // 3. If they lead no other teams, demote them from tech lead status
-      if (otherTeamsLed.length === 0) {
-        const userDocRef = doc(firestore, 'users', techLeadId);
-        batch.update(userDocRef, { isTechLead: false });
+        // If they lead no other teams, demote them from tech lead status
+        if (otherTeamsLed.length === 0) {
+            const userDocRef = doc(firestore, 'users', techLeadId);
+            batch.update(userDocRef, { isTechLead: false, teamId: null });
+        }
       }
+
+      // TODO: Unassign all users from the deleted team.
       
       // 4. Commit the batch
       await batch.commit().catch(async () => {
@@ -435,7 +451,7 @@ export function TeamsTable() {
               teams.map((team) => (
                 <TableRow key={team.id}>
                   <TableCell className="font-medium">{team.name}</TableCell>
-                  <TableCell>{usersMap.get(team.techLeadId) ?? 'N/A'}</TableCell>
+                  <TableCell>{team.techLeadId ? usersMap.get(team.techLeadId) ?? 'N/A' : 'N/A'}</TableCell>
                   <TableCell>{team.availableServiceIds?.length || 0}</TableCell>
                   <TableCell className="text-right">
                       <DropdownMenu>
