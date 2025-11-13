@@ -1,4 +1,3 @@
-
 /**
  * This file is the entry point for all of your backend logic (Cloud Functions).
  *
