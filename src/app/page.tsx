@@ -24,32 +24,60 @@ export default function HomePage() {
   const { toast } = useToast();
   const [status, setStatus] = useState<'loading' | 'signingIn' | 'redirecting' | 'idle'>('loading');
 
+  console.log('[HomePage] Render. Status:', status, 'isUserLoading:', isUserLoading, 'User:', user?.email);
+
   useEffect(() => {
     if (isUserLoading) {
+      console.log('[HomePage] useEffect: Firebase is loading user...');
       return; 
     }
     if (user) {
+      console.log('[HomePage] useEffect: User is already logged in, redirecting to dashboard. User:', user.email);
       setStatus('redirecting');
       router.push('/dashboard');
     } else {
+      console.log('[HomePage] useEffect: No user, setting status to idle.');
       setStatus('idle');
     }
   }, [user, isUserLoading, router]);
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth) {
+      console.log('[HomePage] Redirect useEffect: Auth service not ready.');
+      return;
+    }
 
+    console.log('[HomePage] Redirect useEffect: Checking for redirect result...');
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
+          console.log('[HomePage] Redirect result RECEIVED.', result);
           setStatus('redirecting');
           toast({ title: "Signed In", description: "Успешная аутентификация. Создание профиля..." });
+          
+          // ЭТО ФИНАЛЬНЫЙ ФИКС ---
+          // Если по какой-то причине аккаунт Google не вернул email,
+          // мы не можем создать профиль и должны остановить процесс.
+          if (!result.user.email) {
+            console.error("[HomePage] CRITICAL: User object from redirect is missing email. Cannot create profile.", result.user);
+            toast({
+                variant: "destructive",
+                title: "Ошибка создания профиля",
+                description: "Ваш аккаунт Google не предоставил email. Вход невозможен.",
+            });
+            setStatus('idle');
+            return;
+          }
+
+          console.log('[HomePage] Calling createUserProfile for user:', result.user.email);
           await createUserProfile(result.user);
           // The useUser hook will update and the first useEffect will handle the redirect.
+        } else {
+          console.log('[HomePage] Redirect result is NULL. No user from redirect.');
         }
       })
       .catch((error) => {
-        console.error("Redirect Result Error: ", error);
+        console.error("[HomePage] Redirect Result Error: ", error);
         toast({
           variant: "destructive",
           title: "Sign-in Failed",
@@ -61,37 +89,30 @@ export default function HomePage() {
 
   const createUserProfile = async (user: User) => {
     if (!auth) return;
-
-    // --- ЭТО ФИНАЛЬНЫЙ ФИКС ---
-    // Если по какой-то причине аккаунт Google не вернул email,
-    // мы не можем создать профиль и должны остановить процесс.
-    if (!user.email) {
-      console.error("CRITICAL: User object is missing email. Cannot create profile.", user);
-      toast({
-          variant: "destructive",
-          title: "Ошибка создания профиля",
-          description: "Ваш аккаунт Google не предоставил email. Вход невозможен.",
-      });
-      // Предотвращаем дальнейшее выполнение, чтобы избежать ошибок
-      return;
-    }
     
+    console.log('[createUserProfile] Attempting to create profile for UID:', user.uid);
+
     const firestore = getFirestore(auth.app);
     const userDocRef = doc(firestore, 'users', user.uid);
     try {
       const userDoc = await getDoc(userDocRef);
       if (!userDoc.exists()) {
-        await setDoc(userDocRef, {
+        const newUserProfile = {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
           isAdmin: false, 
           isTechLead: false, 
-        }, { merge: true });
+        };
+        console.log('[createUserProfile] User does not exist. Creating with data:', newUserProfile);
+        await setDoc(userDocRef, newUserProfile, { merge: true });
+        console.log('[createUserProfile] Profile CREATED successfully.');
+      } else {
+        console.log('[createUserProfile] User already exists. No action needed.');
       }
     } catch (error) {
-      console.error("Error creating user profile:", error);
+      console.error("[createUserProfile] Error creating user profile:", error);
       toast({
         variant: "destructive",
         title: "Profile Error",
@@ -105,12 +126,16 @@ export default function HomePage() {
       toast({ variant: 'destructive', title: 'Сервис аутентификации не готов' });
       return;
     }
+    console.log('[handleSignIn] Starting sign-in process...');
     setStatus('signingIn');
     try {
         await setPersistence(auth, browserLocalPersistence);
+        console.log('[handleSignIn] Persistence set. Creating GoogleAuthProvider.');
         const provider = new GoogleAuthProvider();
         await signInWithRedirect(auth, provider);
+        console.log('[handleSignIn] signInWithRedirect called. Now waiting for redirect...');
     } catch(error: any) {
+         console.error('[handleSignIn] Error:', error);
          toast({ variant: 'destructive', title: 'Sign in failed', description: error.message });
          setStatus('idle');
     }
