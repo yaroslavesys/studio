@@ -28,6 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -76,7 +77,17 @@ const formSchema = z.object({
   isAdmin: z.boolean(),
   isTechLead: z.boolean(),
   teamId: z.string().optional(),
+}).refine(data => {
+    // If user is a tech lead, they must be assigned to a team.
+    if (data.isTechLead && (!data.teamId || data.teamId === 'none')) {
+        return false;
+    }
+    return true;
+}, {
+    message: "A Tech Lead must be assigned to a team.",
+    path: ["teamId"], // This error will be shown under the teamId field
 });
+
 
 function EditUserForm({
   user,
@@ -103,12 +114,21 @@ function EditUserForm({
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!firestore || !functions) return;
     const userDocRef = doc(firestore, 'users', user.uid);
-    const updateData: any = { 
+    
+    // This data is for display purposes in the Firestore DB
+    const displayUpdateData: any = { 
         teamId: values.teamId === 'none' || values.teamId === '' ? null : values.teamId,
-        // We also write the roles to the DB for display purposes in the app
         isAdmin: values.isAdmin,
         isTechLead: values.isTechLead,
     };
+    
+    // This data is for security rules via Custom Claims
+    const claimsUpdateData = {
+        isAdmin: values.isAdmin,
+        isTechLead: values.isTechLead,
+        // We also add the teamId to the token to make security rules more efficient
+        teamId: displayUpdateData.teamId, 
+    }
 
     try {
         // This is the critical part: Call the cloud function to set custom claims
@@ -116,15 +136,12 @@ function EditUserForm({
         const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
         await setCustomClaims({ 
             uid: user.uid, 
-            claims: { 
-                isAdmin: values.isAdmin, 
-                isTechLead: values.isTechLead 
-            } 
+            claims: claimsUpdateData
         });
         
         // After successfully setting claims, update the Firestore document
         // for display purposes. The security rules will rely on the claims.
-        await updateDoc(userDocRef, updateData);
+        await updateDoc(userDocRef, displayUpdateData);
 
         toast({
             title: 'User Updated',
@@ -137,11 +154,11 @@ function EditUserForm({
         console.error("Error updating user or setting claims:", error);
         
         // If it's a Firestore permission error, use our custom handler
-        if (error.code === 'permission-denied') {
+        if (error.code === 'permission-denied' && error.details?.path) {
              const permissionError = new FirestorePermissionError({
-                path: userDocRef.path,
-                operation: 'update',
-                requestResourceData: updateData,
+                path: error.details.path,
+                operation: error.details.operation,
+                requestResourceData: error.details.requestResourceData,
             });
             errorEmitter.emit('permission-error', permissionError);
         } else {
@@ -230,7 +247,12 @@ function EditUserForm({
             )}
           />
         </div>
-        <Button type="submit">Save Changes</Button>
+        <DialogFooter>
+             <Button type="button" variant="ghost" onClick={onFinished}>
+                Cancel
+            </Button>
+            <Button type="submit">Save Changes</Button>
+        </DialogFooter>
       </form>
     </Form>
   );
