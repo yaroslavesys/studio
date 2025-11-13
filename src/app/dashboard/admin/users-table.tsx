@@ -1,7 +1,8 @@
+
 'use client';
 import { useState, useMemo } from 'react';
 import { collection, doc, updateDoc } from 'firebase/firestore';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useFunctions } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -52,7 +53,6 @@ import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { httpsCallable } from 'firebase/functions';
-import { getFunctions } from 'firebase/functions';
 
 
 // --- Types ---
@@ -88,6 +88,7 @@ function EditUserForm({
   onFinished: () => void;
 }) {
   const firestore = useFirestore();
+  const functions = useFunctions();
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -100,19 +101,18 @@ function EditUserForm({
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!firestore) return;
+    if (!firestore || !functions) return;
     const userDocRef = doc(firestore, 'users', user.uid);
-    const updateData: any = { ...values };
-     if (updateData.teamId === 'none' || updateData.teamId === '') {
-      updateData.teamId = null;
-    }
+    const updateData: any = { 
+        teamId: values.teamId === 'none' || values.teamId === '' ? null : values.teamId,
+        // We also write the roles to the DB for display purposes in the app
+        isAdmin: values.isAdmin,
+        isTechLead: values.isTechLead,
+    };
 
     try {
-        await updateDoc(userDocRef, updateData);
-        
         // This is the critical part: Call the cloud function to set custom claims
-        // This makes the UI the source of truth for role assignments.
-        const functions = getFunctions();
+        // This makes the ID token the source of truth for security rules.
         const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
         await setCustomClaims({ 
             uid: user.uid, 
@@ -121,10 +121,14 @@ function EditUserForm({
                 isTechLead: values.isTechLead 
             } 
         });
+        
+        // After successfully setting claims, update the Firestore document
+        // for display purposes. The security rules will rely on the claims.
+        await updateDoc(userDocRef, updateData);
 
         toast({
             title: 'User Updated',
-            description: `Successfully updated ${user.displayName}. The new roles will apply on their next login.`,
+            description: `Successfully updated ${user.displayName}. Their new roles will apply on their next login.`,
         });
 
         onFinished();
@@ -360,7 +364,7 @@ export function UsersTable() {
           <DialogHeader>
             <DialogTitle>Edit {selectedUser?.displayName}</DialogTitle>
             <DialogDescription>
-              Modify user roles and team assignment.
+              Modify user roles and team assignment. Roles will apply on the user's next login.
             </DialogDescription>
           </DialogHeader>
           {selectedUser && teams && (

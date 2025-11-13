@@ -5,9 +5,9 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
 
-interface UserProfile {
-  isAdmin: boolean;
-  isTechLead: boolean;
+interface UserClaims {
+  isAdmin?: boolean;
+  isTechLead?: boolean;
 }
 
 export default function DashboardLayout({
@@ -32,28 +32,34 @@ export default function DashboardLayout({
       return;
     }
     
-    // 3. If loading is finished and there IS a user, check their role.
+    // 3. If loading is finished and there IS a user, check their role via Custom Claims.
     const checkUserRole = async () => {
-      // Force a refresh of the ID token to get the latest custom claims.
-      // This is the most critical part to get the correct roles.
-      const idTokenResult = await user.getIdTokenResult(true); 
-      const claims = (idTokenResult.claims || {}) as Partial<UserProfile>;
-      const isAdmin = claims.isAdmin === true;
-      const isTechLead = claims.isTechLead === true;
+      try {
+        // Force a refresh of the ID token to get the latest custom claims.
+        // This is the most critical part to get the correct roles immediately.
+        const idTokenResult = await user.getIdTokenResult(true); 
+        const claims = (idTokenResult.claims || {}) as UserClaims;
+        const isAdmin = claims.isAdmin === true;
+        const isTechLead = claims.isTechLead === true;
 
-      // 4. Redirect based on role.
-      // This logic prevents infinite loops by checking the current path.
-      if (isAdmin && !pathname.startsWith('/dashboard/admin')) {
-        router.replace('/dashboard/admin');
-      } else if (!isAdmin && isTechLead && !pathname.startsWith('/dashboard/techlead')) {
-        router.replace('/dashboard/techlead');
-      } else if (!isAdmin && !isTechLead && (pathname.startsWith('/dashboard/admin') || pathname.startsWith('/dashboard/techlead'))) {
-        // If a normal user tries to access admin/techlead pages, send them to their dashboard.
+        // 4. Redirect based on role.
+        // This logic prevents infinite loops by checking the current path.
+        if (isAdmin && !pathname.startsWith('/dashboard/admin')) {
+          router.replace('/dashboard/admin');
+        } else if (!isAdmin && isTechLead && !pathname.startsWith('/dashboard/techlead')) {
+          router.replace('/dashboard/techlead');
+        } else if (!isAdmin && !isTechLead && (pathname.startsWith('/dashboard/admin') || pathname.startsWith('/dashboard/techlead'))) {
+          // If a normal user tries to access admin/techlead pages, send them to their dashboard.
+          router.replace('/dashboard');
+        }
+      } catch (error) {
+        console.error("Error getting user claims:", error);
+        // If we can't get claims, send to basic dashboard to avoid loops.
         router.replace('/dashboard');
+      } finally {
+        // 5. Mark that the role check is complete.
+        setHasCheckedRole(true);
       }
-      
-      // 5. Mark that the role check is complete.
-      setHasCheckedRole(true);
     };
 
     checkUserRole();
