@@ -28,26 +28,31 @@ export default function HomePage() {
 
   useEffect(() => {
     if (isUserLoading) {
-      console.log('[HomePage] useEffect: Firebase is loading user...');
+      console.log('[HomePage] useEffect (user check): Firebase is loading user. Waiting...');
+      setStatus('loading');
       return; 
     }
     if (user) {
-      console.log('[HomePage] useEffect: User is already logged in, redirecting to dashboard. User:', user.email);
+      console.log('[HomePage] useEffect (user check): User is already logged in, redirecting to dashboard. User:', user.email);
       setStatus('redirecting');
       router.push('/dashboard');
     } else {
-      console.log('[HomePage] useEffect: No user, setting status to idle.');
-      setStatus('idle');
+       console.log('[HomePage] useEffect (user check): No user found yet. Status becomes idle.');
+       // Only set to idle if we aren't already in the middle of a sign-in flow
+       if (status !== 'signingIn') {
+           setStatus('idle');
+       }
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, router, status]);
 
   useEffect(() => {
+    // This effect should only run once when the auth service is available
     if (!auth) {
       console.log('[HomePage] Redirect useEffect: Auth service not ready.');
       return;
     }
 
-    console.log('[HomePage] Redirect useEffect: Checking for redirect result...');
+    console.log('[HomePage] Redirect useEffect: Auth ready. Checking for redirect result...');
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
@@ -55,9 +60,6 @@ export default function HomePage() {
           setStatus('redirecting');
           toast({ title: "Signed In", description: "Успешная аутентификация. Создание профиля..." });
           
-          // ЭТО ФИНАЛЬНЫЙ ФИКС ---
-          // Если по какой-то причине аккаунт Google не вернул email,
-          // мы не можем создать профиль и должны остановить процесс.
           if (!result.user.email) {
             console.error("[HomePage] CRITICAL: User object from redirect is missing email. Cannot create profile.", result.user);
             toast({
@@ -71,9 +73,13 @@ export default function HomePage() {
 
           console.log('[HomePage] Calling createUserProfile for user:', result.user.email);
           await createUserProfile(result.user);
-          // The useUser hook will update and the first useEffect will handle the redirect.
+          // The useUser hook will update, and the first useEffect will handle the redirect.
         } else {
           console.log('[HomePage] Redirect result is NULL. No user from redirect.');
+           // If there is no result and no user is loading, we are truly idle.
+          if(!isUserLoading && !user) {
+            setStatus('idle');
+          }
         }
       })
       .catch((error) => {
@@ -85,7 +91,7 @@ export default function HomePage() {
         });
         setStatus('idle');
       });
-  }, [auth]);
+  }, [auth]); // Depend only on auth
 
   const createUserProfile = async (user: User) => {
     if (!auth) return;
@@ -141,7 +147,8 @@ export default function HomePage() {
     }
   };
   
-  if (status === 'loading' || status === 'redirecting' || isUserLoading) {
+  // A consolidated loading state
+  if (status === 'loading' || status === 'redirecting' || (isUserLoading && status !== 'idle')) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p>{status === 'redirecting' ? 'Перенаправление на дашборд...' : 'Загрузка...'}</p>
