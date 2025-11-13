@@ -45,7 +45,7 @@ export default function HomePage() {
           // User has successfully signed in via redirect.
           toast({ title: "Signed In", description: "Successfully authenticated." });
           await createUserProfile(result.user);
-          // The onAuthStateChanged listener will pick up the user,
+          // The onAuthStateChanged listener (in useUser) will pick up the user,
           // and Effect 1 will handle the redirection. We don't need to do it here.
         }
         // Whether there was a result or not, we are done processing the redirect.
