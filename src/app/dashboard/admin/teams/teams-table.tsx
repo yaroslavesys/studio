@@ -67,7 +67,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Service } from '@/lib/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { deleteDoc, addDoc } from 'firebase/firestore';
+import { deleteDoc, addDoc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 
@@ -76,6 +76,7 @@ interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
+  isAdmin?: boolean;
   isTechLead?: boolean;
   teamId?: string;
 }
@@ -119,7 +120,7 @@ function TeamForm({
     resolver: zodResolver(teamFormSchema),
     defaultValues: {
       name: team?.name || '',
-      techLeadId: team?.techLeadId || '',
+      techLeadId: team?.techLeadId || 'none',
       availableServiceIds: team?.availableServiceIds || [],
     },
   });
@@ -127,12 +128,11 @@ function TeamForm({
   const onSubmit = async (values: z.infer<typeof teamFormSchema>) => {
     if (!firestore || !functions) return;
     
-    const batch = writeBatch(firestore);
+    const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
     const newTechLeadId = values.techLeadId === 'none' || !values.techLeadId ? undefined : values.techLeadId;
     const previousTechLeadId = team?.techLeadId;
-    const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
 
-    const finalTeamData: Omit<Team, 'id'> = {
+    const finalTeamData: any = {
         name: values.name,
         availableServiceIds: values.availableServiceIds,
         techLeadId: newTechLeadId,
@@ -142,20 +142,16 @@ function TeamForm({
       if (isEditing) {
         // Update team document
         const teamDocRef = doc(firestore, 'teams', team.id);
-        batch.update(teamDocRef, finalTeamData);
+        await updateDoc(teamDocRef, finalTeamData);
         
         // Handle tech lead changes
         if (newTechLeadId !== previousTechLeadId) {
           // Demote previous tech lead if they are no longer leading this team
           if (previousTechLeadId) {
             const previousTechLeadUser = users.find(u => u.uid === previousTechLeadId);
-            if(previousTechLeadUser) {
-                // Check if they lead other teams
-                const leadsOtherTeams = teams.some(t => t.techLeadId === previousTechLeadId && t.id !== team.id);
-                if (!leadsOtherTeams) {
-                    await setCustomClaims({ uid: previousTechLeadId, claims: { isTechLead: false, teamId: null, isAdmin: previousTechLeadUser.isAdmin } });
-                }
-            }
+             if (previousTechLeadUser) {
+                  await setCustomClaims({ uid: previousTechLeadId, claims: { isTechLead: false, teamId: null, isAdmin: previousTechLeadUser.isAdmin } });
+             }
           }
           // Promote new tech lead
           if (newTechLeadId) {
@@ -166,8 +162,7 @@ function TeamForm({
           }
         }
       } else { // Creating a new team
-        const newTeamRef = doc(collection(firestore, 'teams'));
-        batch.set(newTeamRef, finalTeamData);
+        const newTeamRef = await addDoc(collection(firestore, 'teams'), finalTeamData);
 
         // If a tech lead is assigned on creation, update their claims
         if (newTechLeadId) {
@@ -178,7 +173,6 @@ function TeamForm({
         }
       }
 
-      await batch.commit();
       toast({ title: isEditing ? 'Team Updated' : 'Team Created' });
       onFinished();
 
@@ -308,6 +302,7 @@ function TeamForm({
 // --- Main Teams Table ---
 export function TeamsTable() {
   const firestore = useFirestore();
+  const functions = useFunctions();
   const { toast } = useToast();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | undefined>(undefined);
@@ -360,9 +355,9 @@ export function TeamsTable() {
 
 
   const handleDelete = async (teamToDelete: Team) => {
-    if (!firestore || !teams) return;
+    if (!firestore || !teams || !functions) return;
     const batch = writeBatch(firestore);
-
+    const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
     
       // 1. Delete the team
       const teamDocRef = doc(firestore, 'teams', teamToDelete.id);
@@ -371,15 +366,9 @@ export function TeamsTable() {
       // 2. If the team had a tech lead, handle their demotion.
       const techLeadId = teamToDelete.techLeadId;
       if (techLeadId) {
-        // Check if the tech lead is a lead of any OTHER team
-        const otherTeamsLed = teams.filter(
-            (t) => t.techLeadId === techLeadId && t.id !== teamToDelete.id
-        );
-
-        // If they lead no other teams, demote them from tech lead status
-        if (otherTeamsLed.length === 0) {
-            const userDocRef = doc(firestore, 'users', techLeadId);
-            batch.update(userDocRef, { isTechLead: false, teamId: null });
+        const techLeadUser = usersData?.find(u => u.uid === techLeadId);
+        if (techLeadUser) {
+           await setCustomClaims({ uid: techLeadId, claims: { isTechLead: false, teamId: null, isAdmin: techLeadUser.isAdmin } });
         }
       }
 
