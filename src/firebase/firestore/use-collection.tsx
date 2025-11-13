@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -23,6 +24,7 @@ export interface UseCollectionResult<T> {
   data: WithId<T>[] | null; // Document data with ID, or null.
   isLoading: boolean;       // True if loading.
   error: FirestoreError | Error | null; // Error object, or null.
+  mutate: () => void; // Function to manually re-fetch data.
 }
 
 /* Internal implementation of Query:
@@ -58,13 +60,20 @@ export function useCollection<T = any>(
   type StateDataType = ResultItemType[] | null;
 
   const [data, setData] = useState<StateDataType>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true); // Start as loading
   const [error, setError] = useState<FirestoreError | Error | null>(null);
+  const [key, setKey] = useState(0); // Add a key to force re-fetching
+
+  const mutate = () => {
+    setKey(prevKey => prevKey + 1); // Increment key to trigger useEffect
+  };
+
 
   useEffect(() => {
+    // If the query is not ready, do nothing and wait.
     if (!memoizedTargetRefOrQuery) {
       setData(null);
-      setIsLoading(false);
+      setIsLoading(false); // Not loading because we are intentionally waiting for a valid query
       setError(null);
       return;
     }
@@ -84,7 +93,7 @@ export function useCollection<T = any>(
         setError(null);
         setIsLoading(false);
       },
-      (error: FirestoreError) => {
+      (err: FirestoreError) => {
         // This logic extracts the path from either a ref or a query
         const path: string =
           memoizedTargetRefOrQuery.type === 'collection'
@@ -106,9 +115,10 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery]); // Re-run if the target query/reference changes.
+  }, [memoizedTargetRefOrQuery, key]); // Re-run if the target query/reference or key changes.
+
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
-    throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
+    throw new Error('A non-memoized query was passed to useCollection. Use useMemoFirebase to memoize the query.');
   }
-  return { data, isLoading, error };
+  return { data, isLoading, error, mutate };
 }

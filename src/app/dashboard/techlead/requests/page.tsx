@@ -53,6 +53,7 @@ export default function TechLeadRequestsPage() {
   const { data: team, isLoading: isLoadingTeam, error: teamError } = useDoc<Team>(teamRef);
 
   const teamMembersQuery = useMemoFirebase(() => {
+    // We only query if we have the user's teamId
     if (!firestore || !userProfile?.teamId) return null;
     return query(collection(firestore, 'users'), where('teamId', '==', userProfile.teamId));
   }, [firestore, userProfile?.teamId]);
@@ -81,8 +82,10 @@ export default function TechLeadRequestsPage() {
     return new Map(services.map((s) => [s.id, s.name]));
   }, [services]);
   
-  const isLoading = isLoadingProfile || isLoadingMembers || isLoadingServices || isLoadingTeam;
-  const error = profileError || membersError || servicesError || teamError;
+  // Wait for the profile to load before showing anything else
+  const isLoading = isLoadingProfile || isLoadingTeam || isLoadingMembers || isLoadingServices;
+  const error = profileError || teamError || membersError || servicesError;
+
 
   if (isLoading) {
     return (
@@ -108,12 +111,12 @@ export default function TechLeadRequestsPage() {
     );
   }
   
-  if (!userProfile?.teamId || !team) {
+  if (!userProfile?.isTechLead || !userProfile.teamId || !team) {
      return (
        <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>No Team Assigned</AlertTitle>
-        <AlertDescription>You are not assigned to a team, so there are no requests to display.</AlertDescription>
+        <AlertDescription>You are not assigned to a team as a Tech Lead, so there are no requests to display.</AlertDescription>
       </Alert>
     );
   }
@@ -132,6 +135,7 @@ export default function TechLeadRequestsPage() {
                 teamMemberIds={teamMemberIds}
                 usersMap={usersMap}
                 servicesMap={servicesMap}
+                userProfile={userProfile}
             />
         </CardContent>
       </Card>

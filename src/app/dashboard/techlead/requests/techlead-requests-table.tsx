@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   doc,
   updateDoc,
@@ -13,7 +13,7 @@ import {
   getDocs,
   DocumentData,
 } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -67,7 +67,7 @@ interface UserProfile {
   isTechLead?: boolean;
 }
 
-const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, onFinished: () => void }) => {
+const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, onFinished: (req: AccessRequest) => void }) => {
     const firestore = useFirestore();
     const { toast } = useToast();
     const { user: currentUser } = useUser();
@@ -94,7 +94,7 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
             errorEmitter.emit('permission-error', permissionError);
         });
         toast({ title: 'Request Rejected' });
-        onFinished();
+        onFinished(request);
     };
     
     return (
@@ -105,7 +105,7 @@ const RejectRequestForm = ({ request, onFinished }: { request: AccessRequest, on
                 onChange={(e) => setNotes(e.target.value)}
             />
             <DialogFooter>
-                <Button variant="ghost" onClick={onFinished}>Cancel</Button>
+                <Button variant="ghost" onClick={() => onFinished(request)}>Cancel</Button>
                 <Button variant="destructive" onClick={handleReject}>Confirm Rejection</Button>
             </DialogFooter>
         </div>
@@ -117,60 +117,31 @@ export function TechleadRequestsTable({
     teamMemberIds,
     usersMap,
     servicesMap,
+    userProfile,
 }: { 
     teamMemberIds: string[],
     usersMap: Map<string, UserProfile>,
     servicesMap: Map<string, string>,
+    userProfile: UserProfile,
 }) {
   const firestore = useFirestore();
   const { user: currentUser } = useUser();
   const { toast } = useToast();
   
   const [requestToReject, setRequestToReject] = useState<AccessRequest | null>(null);
-  const [requests, setRequests] = useState<AccessRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<FirestoreError | null>(null);
+  
+  const requestsQuery = useMemoFirebase(() => {
+    if (!firestore || teamMemberIds.length === 0) return null;
+    
+    // Tech leads should only see requests from their team that are pending *their* approval.
+    return query(
+        collection(firestore, 'requests'), 
+        where('userId', 'in', teamMemberIds), 
+        where('status', '==', 'pending')
+    );
+  }, [firestore, teamMemberIds]);
 
-
-  useEffect(() => {
-    if (!firestore || !currentUser || !teamMemberIds.length) {
-        setIsLoading(false);
-        setRequests([]);
-        return;
-    }
-
-    const fetchRequests = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const requestsRef = collection(firestore, 'requests');
-            // This query fetches all requests from team members that are pending.
-            const q = query(
-                requestsRef, 
-                where('userId', 'in', teamMemberIds), 
-                where('status', '==', 'pending')
-            );
-
-            const querySnapshot = await getDocs(q);
-            const fetchedRequests = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccessRequest));
-
-            setRequests(fetchedRequests.sort((a, b) => b.requestedAt.toMillis() - a.requestedAt.toMillis()));
-
-        } catch (err: any) {
-             const permissionError = new FirestorePermissionError({
-                path: 'requests', // This is a best-effort path for the error
-                operation: 'list',
-             });
-             setError(permissionError); // Set the detailed error
-             // We emit it as well so the dev overlay catches it.
-             errorEmitter.emit('permission-error', permissionError);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    fetchRequests();
-  }, [firestore, currentUser, teamMemberIds]);
+  const { data: requests, isLoading, error, mutate: mutateRequests } = useCollection<AccessRequest>(requestsQuery);
 
 
   const handleApprove = (request: AccessRequest) => {
@@ -184,6 +155,9 @@ export function TechleadRequestsTable({
     };
 
     updateDoc(requestDocRef, updateData)
+     .then(() => {
+        toast({ title: "Request Approved", description: "The request has been sent to an admin for final processing." });
+     })
      .catch(async () => {
         const permissionError = new FirestorePermissionError({
             path: requestDocRef.path,
@@ -192,13 +166,10 @@ export function TechleadRequestsTable({
         });
         errorEmitter.emit('permission-error', permissionError);
     });
-    toast({ title: "Request Approved", description: "The request has been sent to an admin for final processing." });
-    setRequests(prev => prev.filter(r => r.id !== request.id));
   };
   
   const onRejectFinished = (rejectedRequest: AccessRequest) => {
     setRequestToReject(null);
-    setRequests(prev => prev.filter(r => r.id !== rejectedRequest.id));
   }
 
 
@@ -251,7 +222,7 @@ export function TechleadRequestsTable({
                     <TableCell>{servicesMap.get(request.serviceId) || 'Unknown Service'}</TableCell>
                     <TableCell><SafeDate date={request.requestedAt?.toDate()} /></TableCell>
                     <TableCell>
-                      <Badge variant="secondary">Pending</Badge>
+                      <Badge variant="secondary">Pending Your Approval</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                         <DropdownMenu>

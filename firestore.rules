@@ -68,8 +68,9 @@ service cloud.firestore {
       function isUserOnTechLeadsTeam(userId) {
         // Use custom claims for the tech lead's teamId for efficiency.
         let techLeadTeamId = request.auth.token.teamId; 
+        // We must read the user's document to see which team they are on.
         let userTeamId = getUserData(userId).teamId;
-        // Check both the claim and that the user being checked belongs to that team.
+        // Check that the caller is a tech lead, has a team, and the user being checked belongs to that same team.
         return isTechLead() && techLeadTeamId != null && techLeadTeamId == userTeamId;
       }
       
@@ -79,7 +80,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         isOwner(resource.data.userId) || 
         isAdmin() ||
-        isUserOnTechLeadsTeam(resource.data.userId)
+        (isTechLead() && isUserOnTechLeadsTeam(resource.data.userId))
       );
 
       // Admins and the user's Tech Lead can update a request (approve/reject).
