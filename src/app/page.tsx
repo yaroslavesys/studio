@@ -24,79 +24,65 @@ export default function HomePage() {
   const { toast } = useToast();
   const [status, setStatus] = useState<'loading' | 'signingIn' | 'redirecting' | 'idle'>('loading');
 
-  console.log('[HomePage] Render. Status:', status, 'isUserLoading:', isUserLoading, 'User:', user?.email);
-
+  // Effect 1: Handle user state changes
   useEffect(() => {
+    console.log(`[HomePage] User State Effect. isUserLoading: ${isUserLoading}, user: ${user?.email}`);
     if (isUserLoading) {
-      console.log('[HomePage] useEffect (user check): Firebase is loading user. Waiting...');
       setStatus('loading');
-      return; 
+      return;
     }
     if (user) {
-      console.log('[HomePage] useEffect (user check): User is already logged in, redirecting to dashboard. User:', user.email);
+      console.log('[HomePage] User found. Redirecting to /dashboard');
       setStatus('redirecting');
       router.push('/dashboard');
     } else {
-       console.log('[HomePage] useEffect (user check): No user found yet. Status becomes idle.');
-       // Only set to idle if we aren't already in the middle of a sign-in flow
-       if (status !== 'signingIn') {
-           setStatus('idle');
-       }
-    }
-  }, [user, isUserLoading, router, status]);
-
-  useEffect(() => {
-    // This effect should only run once when the auth service is available
-    if (!auth) {
-      console.log('[HomePage] Redirect useEffect: Auth service not ready.');
-      return;
-    }
-
-    console.log('[HomePage] Redirect useEffect: Auth ready. Checking for redirect result...');
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result) {
-          console.log('[HomePage] Redirect result RECEIVED.', result);
-          setStatus('redirecting');
-          toast({ title: "Signed In", description: "Успешная аутентификация. Создание профиля..." });
-          
-          if (!result.user.email) {
-            console.error("[HomePage] CRITICAL: User object from redirect is missing email. Cannot create profile.", result.user);
+      // Only check for redirect result if we are not already signing in and have no user
+      if (status !== 'signingIn') {
+        console.log('[HomePage] No user and not signing in. Checking for redirect result.');
+        setStatus('loading'); // Set to loading while we check the redirect
+        
+        getRedirectResult(auth)
+          .then(async (result) => {
+            if (result) {
+              console.log('[HomePage] Redirect result RECEIVED.', result);
+              setStatus('redirecting');
+              toast({ title: "Signed In", description: "Успешная аутентификация. Создание профиля..." });
+              
+              await createUserProfile(result.user);
+              // The user state will change, and this useEffect will run again to redirect.
+            } else {
+              console.log('[HomePage] Redirect result is NULL. Setting status to idle.');
+              setStatus('idle'); // No user, no redirect, we are idle.
+            }
+          })
+          .catch((error) => {
+            console.error("[HomePage] Redirect Result Error: ", error);
             toast({
-                variant: "destructive",
-                title: "Ошибка создания профиля",
-                description: "Ваш аккаунт Google не предоставил email. Вход невозможен.",
+              variant: "destructive",
+              title: "Sign-in Failed",
+              description: error.message || "Произошла ошибка во время входа.",
             });
             setStatus('idle');
-            return;
-          }
-
-          console.log('[HomePage] Calling createUserProfile for user:', result.user.email);
-          await createUserProfile(result.user);
-          // The useUser hook will update, and the first useEffect will handle the redirect.
-        } else {
-          console.log('[HomePage] Redirect result is NULL. No user from redirect.');
-           // If there is no result and no user is loading, we are truly idle.
-          if(!isUserLoading && !user) {
-            setStatus('idle');
-          }
-        }
-      })
-      .catch((error) => {
-        console.error("[HomePage] Redirect Result Error: ", error);
-        toast({
-          variant: "destructive",
-          title: "Sign-in Failed",
-          description: error.message || "Произошла ошибка во время входа.",
-        });
-        setStatus('idle');
-      });
-  }, [auth]); // Depend only on auth
+          });
+      }
+    }
+  }, [user, isUserLoading, auth, router, toast]);
 
   const createUserProfile = async (user: User) => {
     if (!auth) return;
     
     console.log('[createUserProfile] Attempting to create profile for UID:', user.uid);
+
+    if (!user.email) {
+      console.error("[HomePage] CRITICAL: User object from redirect is missing email. Cannot create profile.", user);
+      toast({
+          variant: "destructive",
+          title: "Ошибка создания профиля",
+          description: "Ваш аккаунт Google не предоставил email. Вход невозможен.",
+      });
+      setStatus('idle');
+      return;
+    }
 
     const firestore = getFirestore(auth.app);
     const userDocRef = doc(firestore, 'users', user.uid);
@@ -137,7 +123,7 @@ export default function HomePage() {
     try {
         await setPersistence(auth, browserLocalPersistence);
         console.log('[handleSignIn] Persistence set. Creating GoogleAuthProvider.');
-        const provider = new GoogleAuthProvider();
+        const provider = new GoogleAuthProvider(); // Use the specific provider
         await signInWithRedirect(auth, provider);
         console.log('[handleSignIn] signInWithRedirect called. Now waiting for redirect...');
     } catch(error: any) {
@@ -147,8 +133,7 @@ export default function HomePage() {
     }
   };
   
-  // A consolidated loading state
-  if (status === 'loading' || status === 'redirecting' || (isUserLoading && status !== 'idle')) {
+  if (status === 'loading' || status === 'redirecting') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p>{status === 'redirecting' ? 'Перенаправление на дашборд...' : 'Загрузка...'}</p>
