@@ -20,6 +20,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [isCheckingRole, setIsCheckingRole] = useState(true);
+  const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
     // 1. Wait until Firebase has finished its initial user loading.
@@ -33,7 +34,13 @@ export default function DashboardLayout({
       return;
     }
     
-    // 3. If loading is finished and there IS a user, check their role via Custom Claims.
+    // 3. Only check role once per user session
+    if (hasChecked) {
+      setIsCheckingRole(false);
+      return;
+    }
+    
+    // 4. If loading is finished and there IS a user, check their role via Custom Claims.
     const checkUserRole = async () => {
       try {
         // Force a refresh of the ID token to get the latest custom claims.
@@ -51,28 +58,30 @@ export default function DashboardLayout({
             targetPath = 'techlead';
         }
         
-        // 4. Redirect based on role, ONLY if necessary.
+        // 5. Redirect based on role, ONLY if necessary.
         if (currentPath !== targetPath && targetPath === 'admin') {
           router.replace('/dashboard/admin');
         } else if (currentPath !== targetPath && targetPath === 'techlead') {
           router.replace('/dashboard/techlead');
         } else if (currentPath !== 'user' && targetPath === 'user') {
            router.replace('/dashboard');
-        } else {
-           // User is on the correct page, or is a normal user on the base dashboard.
-           setIsCheckingRole(false);
         }
+        
+        setHasChecked(true);
       } catch (error) {
         console.error("[DashboardLayout] Error getting user claims:", error);
         // If we can't get claims, send to basic dashboard to avoid loops.
-        setIsCheckingRole(false);
         router.replace('/dashboard');
+        setHasChecked(true);
+      } finally {
+        // Always set isCheckingRole to false after role check completes
+        setIsCheckingRole(false);
       }
     };
 
     checkUserRole();
     
-  }, [user, isUserLoading, router, pathname]);
+  }, [user, isUserLoading, router, pathname, hasChecked]);
 
   // While Firebase is loading OR we are actively checking the role, show a loading screen.
   if (isUserLoading || isCheckingRole) {
