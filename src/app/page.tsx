@@ -51,11 +51,16 @@ export default function HomePage() {
           await createUserProfile(result.user);
           // Force token refresh to get custom claims if they exist
           await result.user.getIdToken(true); 
-          // The navigation will be handled by the next run of this effect when `user` is set.
+          // The user object will be updated by the onAuthStateChanged listener,
+          // which will trigger the effect again and redirect.
+          // Explicitly redirect here to ensure navigation happens.
+          router.push('/dashboard');
         } else {
-          // No redirect result, so this is a fresh visit or the user is already logged in.
-          // In either case, we can stop the processing indicator.
-          setIsProcessing(false);
+          // No redirect result, meaning this is a fresh visit or the user is already logged out.
+          // If the auth state is no longer loading and there's no user, we can stop processing.
+          if (!isUserLoading && !user) {
+            setIsProcessing(false);
+          }
         }
       })
       .catch((error) => {
@@ -67,10 +72,10 @@ export default function HomePage() {
         });
         setIsProcessing(false);
       });
-  // The dependency array is critical. It should only run when auth is available.
-  // We don't include `user` because that would re-trigger it after login, potentially causing loops.
+  // This dependency array is critical. It runs when auth is available and when the user loading state changes.
+  // We don't include `user` because that could cause loops.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth, isUserLoading]);
+  }, [auth, isUserLoading, router]);
 
 
   const createUserProfile = async (user: User) => {
