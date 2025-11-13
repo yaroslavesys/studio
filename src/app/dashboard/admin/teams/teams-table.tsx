@@ -355,26 +355,22 @@ export function TeamsTable() {
   };
 
 
-  const handleDelete = async (teamToDelete: Team) => {
+ const handleDelete = async (teamToDelete: Team) => {
     if (!firestore || !functions) return;
 
     try {
         const batch = writeBatch(firestore);
-
-        // 1. Delete the team document itself
         const teamDocRef = doc(firestore, 'teams', teamToDelete.id);
         batch.delete(teamDocRef);
 
-        // 2. If the team had a tech lead, demote them by updating their claims.
         const techLeadId = teamToDelete.techLeadId;
         if (techLeadId) {
             console.log(`Team has tech lead ${techLeadId}. Preparing to demote.`);
             const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
             const techLeadUser = usersData?.find(u => u.uid === techLeadId);
             
-            // We must call the claims function to ensure the user's document and auth state are both updated.
-            // We pass their current isAdmin status to avoid accidentally removing it.
             if (techLeadUser) {
+                 // Call the 'setCustomClaims' function to demote the user
                  await setCustomClaims({ 
                     uid: techLeadId, 
                     isTechLead: false, 
@@ -384,11 +380,6 @@ export function TeamsTable() {
             }
         }
         
-        // TODO: In a real-world app, you'd also want to find all users in this team
-        // and set their `teamId` to null. This requires a query and would be best
-        // handled in a Cloud Function trigger for atomicity (onDelete of a team).
-        // For this UI, we will just delete the team and handle the tech lead.
-
         await batch.commit();
 
         toast({ title: 'Team Deleted', description: `The ${teamToDelete.name} team has been deleted.` });
@@ -397,7 +388,7 @@ export function TeamsTable() {
         toast({
             variant: "destructive",
             title: 'Delete Failed',
-            description: error.message || 'Could not delete the team and handle tech lead demotion.',
+            description: error.message || 'Could not delete the team.',
         });
     }
 };
@@ -532,4 +523,5 @@ export function TeamsTable() {
   );
 }
 
+    
     

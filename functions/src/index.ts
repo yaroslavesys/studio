@@ -26,12 +26,12 @@ admin.initializeApp();
  * administrator (has the `isAdmin: true` custom claim).
  */
 exports.setCustomClaims = region('europe-west1').https.onCall(async (request) => {
-  logger.info("setCustomClaims function triggered.", { structuredData: true });
+  logger.info("--- setCustomClaims: Function triggered ---", { auth: request.auth, data: request.data });
 
   // 1. Check if the user calling this function is an admin.
   if (request.auth?.token.isAdmin !== true) {
     logger.error(
-      "setCustomClaims permission denied. Caller is not an admin.",
+      "setCustomClaims: Permission denied. Caller is not an admin.",
       { uid: request.auth?.uid }
     );
     throw new HttpsError(
@@ -39,69 +39,74 @@ exports.setCustomClaims = region('europe-west1').https.onCall(async (request) =>
       "You must be an administrator to set user roles."
     );
   }
-   logger.info("Admin check passed.", { uid: request.auth?.uid });
+   logger.info("setCustomClaims: Admin check passed.", { adminUid: request.auth?.uid });
 
 
   // 2. Get the parameters from the client-side call and validate them.
   const { uid, isAdmin, isTechLead, teamId } = request.data;
   if (typeof uid !== "string") {
-     logger.error("Invalid arguments received. 'uid' (string) is required.", { data: request.data });
+     logger.error("setCustomClaims: Invalid arguments. 'uid' (string) is required.", { data: request.data });
      throw new HttpsError(
       "invalid-argument",
       "The function must be called with a 'uid' argument."
     );
   }
-  logger.info(`Arguments valid. Target UID: ${uid}`, { data: request.data });
+  logger.info(`setCustomClaims: Arguments valid. Target UID: ${uid}`, { data: request.data });
 
 
   // 3. Sanitize and validate the claims object.
   const finalClaims = {
     isAdmin: !!isAdmin,
     isTechLead: !!isTechLead,
-    // A user can't be a tech lead without a teamId. If isTechLead is false, teamId MUST be null.
-    teamId: !!isTechLead ? teamId || null : null,
+    ...(teamId && { teamId }), // Conditionally add teamId if it's truthy
   };
 
+  // If a user is a tech lead, they MUST have a team.
+  // The 'teamId' is now only added if it exists, so we adjust the logic here.
+  // If isTechLead is true, teamId must also have been passed in.
   if (finalClaims.isTechLead && !finalClaims.teamId) {
-     logger.error("Validation failed: A user cannot be a Tech Lead without being assigned to a team.", { uid, finalClaims });
+     logger.error("setCustomClaims: Validation failed: A Tech Lead must be assigned to a team.", { uid, finalClaims });
      throw new HttpsError(
       "failed-precondition",
       "A user cannot be a Tech Lead without being assigned to a team."
     );
   }
+  // If a user is NOT a tech lead, ensure they don't have a teamId claim.
+  if (!finalClaims.isTechLead && finalClaims.teamId) {
+    // This case should be handled by client logic, but as a safeguard:
+    logger.warn("setCustomClaims: User is not a Tech Lead, but a teamId was passed. Removing it from claims.", { uid, finalClaims });
+    delete (finalClaims as any).teamId;
+  }
   
-  logger.info(`Sanitized claims to be set for user ${uid}`, { finalClaims });
+  logger.info(`setCustomClaims: Sanitized claims to be set for user ${uid}`, { finalClaims });
 
   try {
     // 4. Set the custom claims on the user's Auth record.
-    logger.info(`Attempting to set custom user claims for ${uid}...`);
-    await admin.auth().setCustomUserClaims(uid, {
-        isAdmin: finalClaims.isAdmin,
-        isTechLead: finalClaims.isTechLead,
-        teamId: finalClaims.teamId
-    });
-    logger.info(`Successfully set custom claims for user ${uid}.`);
+    logger.info(`setCustomClaims: Attempting to set custom user claims for ${uid}...`);
+    await admin.auth().setCustomUserClaims(uid, finalClaims);
+    logger.info(`setCustomClaims: Successfully set custom claims for user ${uid}.`);
 
     // 5. CRITICAL: Update the user's document in Firestore to reflect the new state.
-    // This ensures that the UI is always in sync with the user's actual roles.
-    logger.info(`Attempting to update Firestore document for ${uid}...`);
+    logger.info(`setCustomClaims: Attempting to update Firestore document for ${uid}...`);
     const userDocRef = admin.firestore().collection('users').doc(uid);
-    // Use update to avoid overwriting other fields in the user document.
-    await userDocRef.update({
+    // Prepare the update object. Explicitly set teamId to null if it's not in finalClaims
+    // to ensure it's removed from the document if the user is no longer a tech lead.
+    const firestoreUpdateData = {
         isAdmin: finalClaims.isAdmin,
         isTechLead: finalClaims.isTechLead,
-        teamId: finalClaims.teamId
-    });
-    logger.info(`Successfully updated Firestore document for ${uid}.`);
+        teamId: finalClaims.teamId || null,
+    };
+    await userDocRef.update(firestoreUpdateData);
+    logger.info(`setCustomClaims: Successfully updated Firestore document for ${uid}.`, { firestoreUpdateData });
 
     // 6. Return a success message to the client.
-    logger.info(`Function finished successfully for UID ${uid}.`);
+    logger.info(`--- setCustomClaims: Function finished successfully for UID ${uid}. ---`);
     return {
       status: 'success',
-      message: `Success! User ${uid} has been updated with new roles.`,
+      message: `Success! User ${uid} has been updated.`,
     };
   } catch (error: any) {
-    logger.error("CRITICAL ERROR during claims/Firestore update:", {
+    logger.error("--- CRITICAL ERROR in setCustomClaims during claims/Firestore update: ---", {
       targetUid: uid,
       error: error.message,
       stack: error.stack,
@@ -113,3 +118,5 @@ exports.setCustomClaims = region('europe-west1').https.onCall(async (request) =>
     );
   }
 });
+
+    
