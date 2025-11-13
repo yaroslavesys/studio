@@ -129,7 +129,7 @@ function TeamForm({
     if (!firestore || !functions) return;
     
     const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
-    const newTechLeadId = values.techLeadId === 'none' || !values.techLeadId ? undefined : values.techLeadId;
+    const newTechLeadId = values.techLeadId === 'none' ? null : values.techLeadId;
     const previousTechLeadId = team?.techLeadId;
 
     const finalTeamData: any = {
@@ -150,25 +150,24 @@ function TeamForm({
           if (previousTechLeadId) {
             const previousTechLeadUser = users.find(u => u.uid === previousTechLeadId);
              if (previousTechLeadUser) {
-                  await setCustomClaims({ uid: previousTechLeadId, claims: { isTechLead: false, teamId: null, isAdmin: previousTechLeadUser.isAdmin } });
+                  await setCustomClaims({ uid: previousTechLeadId, claims: { isTechLead: false, teamId: null, isAdmin: !!previousTechLeadUser.isAdmin } });
              }
           }
           // Promote new tech lead
           if (newTechLeadId) {
              const newTechLeadUser = users.find(u => u.uid === newTechLeadId);
              if(newTechLeadUser) {
-                await setCustomClaims({ uid: newTechLeadId, claims: { isTechLead: true, teamId: team.id, isAdmin: newTechLeadUser.isAdmin } });
+                await setCustomClaims({ uid: newTechLeadId, claims: { isTechLead: true, teamId: team.id, isAdmin: !!newTechLeadUser.isAdmin } });
              }
           }
         }
       } else { // Creating a new team
         const newTeamRef = await addDoc(collection(firestore, 'teams'), finalTeamData);
-
         // If a tech lead is assigned on creation, update their claims
         if (newTechLeadId) {
             const newTechLeadUser = users.find(u => u.uid === newTechLeadId);
             if (newTechLeadUser) {
-              await setCustomClaims({ uid: newTechLeadId, claims: { isTechLead: true, teamId: newTeamRef.id, isAdmin: newTechLeadUser.isAdmin } });
+              await setCustomClaims({ uid: newTechLeadId, claims: { isTechLead: true, teamId: newTeamRef.id, isAdmin: !!newTechLeadUser.isAdmin } });
             }
         }
       }
@@ -187,10 +186,11 @@ function TeamForm({
   };
 
   const otherTeamsTechLeadIds = teams
-    .filter((t) => t.id !== team?.id)
+    .filter((t) => t.id !== team?.id && t.techLeadId)
     .map((t) => t.techLeadId);
+
   const availableTechLeads = users.filter(
-    (user) => !otherTeamsTechLeadIds.includes(user.uid)
+    (user) => !otherTeamsTechLeadIds.includes(user.uid) || user.uid === team?.techLeadId
   );
 
 
@@ -359,6 +359,7 @@ export function TeamsTable() {
     const batch = writeBatch(firestore);
     const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
     
+    try {
       // 1. Delete the team
       const teamDocRef = doc(firestore, 'teams', teamToDelete.id);
       batch.delete(teamDocRef);
@@ -368,16 +369,25 @@ export function TeamsTable() {
       if (techLeadId) {
         const techLeadUser = usersData?.find(u => u.uid === techLeadId);
         if (techLeadUser) {
-           await setCustomClaims({ uid: techLeadId, claims: { isTechLead: false, teamId: null, isAdmin: techLeadUser.isAdmin } });
+           await setCustomClaims({ uid: techLeadId, claims: { isTechLead: false, teamId: null, isAdmin: !!techLeadUser.isAdmin } });
         }
       }
-
-      // TODO: Unassign all users from the deleted team.
+      
+      // TODO: Find all users in this team and unassign them. This is a more complex operation.
+      // For now, users will remain in the team until reassigned manually. A Cloud Function trigger would be better for this.
       
       // 4. Commit the batch
       await batch.commit();
 
       toast({ title: 'Team Deleted', description: `The ${teamToDelete.name} team has been deleted.` });
+    } catch (error: any) {
+       console.error("Error deleting team:", error);
+        toast({
+            variant: "destructive",
+            title: 'Delete Failed',
+            description: error.message || 'Could not delete team.',
+        });
+    }
   };
 
   const isLoading = isLoadingTeams || isLoadingUsers || isLoadingServices;
@@ -509,3 +519,5 @@ export function TeamsTable() {
     </>
   );
 }
+
+    

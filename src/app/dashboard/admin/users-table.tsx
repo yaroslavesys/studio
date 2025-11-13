@@ -1,7 +1,7 @@
 
 'use client';
 import { useState, useMemo } from 'react';
-import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc } from 'firebase/firestore';
 import { useCollection, useFirestore, useMemoFirebase, useFunctions } from '@/firebase';
 import {
   Table,
@@ -77,6 +77,7 @@ const formSchema = z.object({
   isTechLead: z.boolean(),
   teamId: z.string().optional(),
 }).refine(data => {
+    // If a user is a tech lead, they MUST have a team assigned.
     if (data.isTechLead && (!data.teamId || data.teamId === 'none')) {
         return false;
     }
@@ -111,14 +112,17 @@ function EditUserForm({
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!functions) return;
     
+    // This is the complete set of claims we want to set.
     const finalClaims = {
         isAdmin: values.isAdmin,
         isTechLead: values.isTechLead,
+        // If the user is not a tech lead, their teamId claim MUST be null.
         teamId: values.isTechLead ? (values.teamId === 'none' ? null : values.teamId) : null, 
     };
 
     try {
         const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
+        // The cloud function is the single source of truth for updating claims AND the firestore doc.
         await setCustomClaims({ 
             uid: user.uid, 
             claims: finalClaims
@@ -126,13 +130,13 @@ function EditUserForm({
         
         toast({
             title: 'User Updated',
-            description: `Successfully updated ${user.displayName}. Their new roles will apply on their next login.`,
+            description: `Successfully updated ${user.displayName}. Their new roles and team assignment are now active.`,
         });
 
         onFinished();
 
     } catch(error: any) {
-        console.error("Error updating user or setting claims:", error);
+        console.error("Error updating user claims from users-table:", error);
         toast({
             variant: "destructive",
             title: 'Update Failed',
@@ -141,6 +145,8 @@ function EditUserForm({
     }
   };
   
+  // A user can be assigned to a team that already has a lead, or to a team without one.
+  // We filter out teams where this user is ALREADY the lead of another team, which is not possible.
   const availableTeams = teams.filter(team => !team.techLeadId || team.techLeadId === user.uid);
 
   return (
@@ -374,3 +380,5 @@ export function UsersTable() {
     </>
   );
 }
+
+    
