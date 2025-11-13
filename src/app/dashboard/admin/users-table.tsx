@@ -111,8 +111,6 @@ function EditUserForm({
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!functions) return;
     
-    // This is the critical change. The teamId MUST be part of the claims object
-    // that is sent to the Cloud Function, because the function logic depends on it.
     const finalClaims = {
         isAdmin: values.isAdmin,
         isTechLead: values.isTechLead,
@@ -123,7 +121,7 @@ function EditUserForm({
         const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
         await setCustomClaims({ 
             uid: user.uid, 
-            claims: finalClaims // Sending the complete, corrected object
+            claims: finalClaims
         });
         
         toast({
