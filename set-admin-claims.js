@@ -12,7 +12,7 @@ const admin = require('firebase-admin');
 const usersToUpdate = [
   {
     // This is the user who will become the first administrator.
-    uid: 'REPLACE_WITH_YOUR_FIREBASE_UID', 
+    uid: '0A9LFbbNpuXGh09Hvden5NFoSvh1', 
     claims: { isAdmin: true, isTechLead: false, teamId: null }
   },
   // You can manage other users and tech leads from the admin panel in the app later.
