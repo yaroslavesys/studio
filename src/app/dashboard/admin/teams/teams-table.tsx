@@ -151,14 +151,14 @@ function TeamForm({
           if (previousTechLeadId) {
             const previousTechLeadUser = users.find(u => u.uid === previousTechLeadId);
              if (previousTechLeadUser) {
-                  await setCustomClaims({ uid: previousTechLeadId, claims: { isTechLead: false, teamId: null, isAdmin: !!previousTechLeadUser.isAdmin } });
+                  await setCustomClaims({ uid: previousTechLeadId, isTechLead: false, teamId: null, isAdmin: !!previousTechLeadUser.isAdmin });
              }
           }
           // Promote new tech lead
           if (newTechLeadId) {
              const newTechLeadUser = users.find(u => u.uid === newTechLeadId);
              if(newTechLeadUser) {
-                await setCustomClaims({ uid: newTechLeadId, claims: { isTechLead: true, teamId: team.id, isAdmin: !!newTechLeadUser.isAdmin } });
+                await setCustomClaims({ uid: newTechLeadId, isTechLead: true, teamId: team.id, isAdmin: !!newTechLeadUser.isAdmin });
              }
           }
         }
@@ -168,7 +168,7 @@ function TeamForm({
         if (newTechLeadId) {
             const newTechLeadUser = users.find(u => u.uid === newTechLeadId);
             if (newTechLeadUser) {
-              await setCustomClaims({ uid: newTechLeadId, claims: { isTechLead: true, teamId: newTeamRef.id, isAdmin: !!newTechLeadUser.isAdmin } });
+              await setCustomClaims({ uid: newTechLeadId, isTechLead: true, teamId: newTeamRef.id, isAdmin: !!newTechLeadUser.isAdmin });
             }
         }
       }
@@ -377,11 +377,9 @@ export function TeamsTable() {
             if (techLeadUser) {
                  await setCustomClaims({ 
                     uid: techLeadId, 
-                    claims: { 
-                        isTechLead: false, 
-                        teamId: null, 
-                        isAdmin: !!techLeadUser.isAdmin 
-                    } 
+                    isTechLead: false, 
+                    teamId: null, 
+                    isAdmin: !!techLeadUser.isAdmin 
                 });
             }
         }

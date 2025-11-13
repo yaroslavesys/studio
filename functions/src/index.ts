@@ -1,3 +1,4 @@
+
 /**
  * This file is the entry point for all of your backend logic (Cloud Functions).
  *
@@ -42,23 +43,23 @@ exports.setCustomClaims = region('europe-west1').https.onCall(async (request) =>
 
 
   // 2. Get the parameters from the client-side call and validate them.
-  const { uid, claims } = request.data;
-  if (typeof uid !== "string" || !claims || typeof claims !== 'object') {
-     logger.error("Invalid arguments received. 'uid' and 'claims' are required.", { uid, claims });
+  const { uid, isAdmin, isTechLead, teamId } = request.data;
+  if (typeof uid !== "string") {
+     logger.error("Invalid arguments received. 'uid' (string) is required.", { data: request.data });
      throw new HttpsError(
       "invalid-argument",
-      "The function must be called with 'uid' (string) and 'claims' (object) arguments."
+      "The function must be called with a 'uid' argument."
     );
   }
-  logger.info(`Arguments valid. Target UID: ${uid}`, { claims });
+  logger.info(`Arguments valid. Target UID: ${uid}`, { data: request.data });
 
 
   // 3. Sanitize and validate the claims object.
   const finalClaims = {
-    isAdmin: !!claims.isAdmin,
-    isTechLead: !!claims.isTechLead,
+    isAdmin: !!isAdmin,
+    isTechLead: !!isTechLead,
     // A user can't be a tech lead without a teamId. If isTechLead is false, teamId MUST be null.
-    teamId: claims.isTechLead ? claims.teamId || null : null,
+    teamId: !!isTechLead ? teamId || null : null,
   };
 
   if (finalClaims.isTechLead && !finalClaims.teamId) {
@@ -112,5 +113,3 @@ exports.setCustomClaims = region('europe-west1').https.onCall(async (request) =>
     );
   }
 });
-
-    

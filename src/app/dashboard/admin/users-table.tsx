@@ -114,6 +114,7 @@ function EditUserForm({
     
     // This is the complete set of claims we want to set.
     const finalClaims = {
+        uid: user.uid,
         isAdmin: values.isAdmin,
         isTechLead: values.isTechLead,
         // If the user is not a tech lead, their teamId claim MUST be null.
@@ -123,10 +124,7 @@ function EditUserForm({
     try {
         const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
         // The cloud function is the single source of truth for updating claims AND the firestore doc.
-        await setCustomClaims({ 
-            uid: user.uid, 
-            claims: finalClaims
-        });
+        await setCustomClaims(finalClaims);
         
         toast({
             title: 'User Updated',
@@ -380,5 +378,3 @@ export function UsersTable() {
     </>
   );
 }
-
-    
