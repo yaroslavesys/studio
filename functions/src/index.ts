@@ -8,9 +8,10 @@
  * https://firebase.google.com/docs/functions
  */
 
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
+import { region } from "firebase-functions";
 
 // This is the only place you should initialize the Admin SDK
 admin.initializeApp();
@@ -21,7 +22,7 @@ admin.initializeApp();
  * This function can only be successfully called by a user who is already an
  * administrator (has the `isAdmin: true` custom claim).
  */
-export const setCustomClaims = onCall(async (request) => {
+exports.setCustomClaims = region('europe-west1').https.onCall(async (request) => {
   logger.info("setCustomClaims function triggered.", { structuredData: true });
 
   // 1. Log the caller's context and incoming data.

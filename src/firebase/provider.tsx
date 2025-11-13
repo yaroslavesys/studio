@@ -6,7 +6,7 @@ import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
 import { Auth, User, onIdTokenChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
-import { Functions } from 'firebase/functions';
+import { Functions, getFunctions } from 'firebase/functions';
 
 interface FirebaseProviderProps {
   children: ReactNode;
@@ -65,13 +65,17 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   firebaseApp,
   firestore,
   auth,
-  functions,
 }) => {
   const [userAuthState, setUserAuthState] = useState<UserAuthState>({
     user: null,
     isUserLoading: true, // Start loading until first auth event
     userError: null,
   });
+
+  const functions = useMemo(() => {
+    if (!firebaseApp) return null;
+    return getFunctions(firebaseApp, 'europe-west1');
+  }, [firebaseApp]);
 
   // Effect to subscribe to Firebase auth state changes
   useEffect(() => {
