@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,44 +25,54 @@ export default function HomePage() {
 
   // This effect handles the result from a redirect sign-in flow
   useEffect(() => {
-    if (!auth) {
-      setIsProcessing(false);
-      return;
-    }
-    // If a user is already logged in, redirect them.
+    // If a user is already logged in from a previous session, redirect them.
     if (user) {
       router.push('/dashboard');
+      return;
+    }
+    
+    // If there's no auth instance yet, we can't do anything.
+    if (!auth) {
+       // Set processing to false so the login button can be shown.
+       if(isUserLoading === false) {
+          setIsProcessing(false);
+       }
       return;
     }
 
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
+          // User has successfully signed in.
           toast({ title: "Signed In", description: "Successfully authenticated."});
           await createUserProfile(result.user);
+          // Force token refresh to get custom claims if they exist
           await result.user.getIdToken(true); 
-          router.push('/dashboard');
+          // This navigation will be handled by the effect checking `user`
         } else {
+          // No redirect result, so this is a fresh visit.
           setIsProcessing(false);
         }
       })
       .catch((error) => {
         console.error("Redirect Result Error: ", error);
-        if (error.code !== 'auth/web-storage-unsupported') {
-            toast({
-              variant: "destructive",
-              title: "Sign-in Failed",
-              description: error.message || "An error occurred during sign-in.",
-            });
-        }
+        toast({
+          variant: "destructive",
+          title: "Sign-in Failed",
+          description: error.message || "An error occurred during sign-in.",
+        });
         setIsProcessing(false);
       });
+  // The dependency array is critical. It should only run when auth is available.
+  // We don't include `user` because that would re-trigger it after login, potentially causing loops.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth]);
+  }, [auth, isUserLoading]);
 
 
   const createUserProfile = async (user: User) => {
-    const firestore = getFirestore();
+    // Ensure you get the firestore instance correctly.
+    if (!auth) return;
+    const firestore = getFirestore(auth.app);
     const userDocRef = doc(firestore, 'users', user.uid);
     try {
       const userDoc = await getDoc(userDocRef);
@@ -72,8 +82,8 @@ export default function HomePage() {
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
-          isAdmin: false,
-          isTechLead: false,
+          isAdmin: false, // Default role
+          isTechLead: false, // Default role
         }, { merge: true });
       }
     } catch (error) {
@@ -94,8 +104,8 @@ export default function HomePage() {
     setIsProcessing(true);
     const provider = new GoogleAuthProvider();
 
-    // The ONLY reliable way to sign in within restrictive iframes (like Studio/Previews)
-    // is to trigger a full-page redirect. We use signInWithRedirect for this.
+    // Use signInWithRedirect. This is the most reliable method for all environments,
+    // as it avoids popup blockers and iframe issues.
     await signInWithRedirect(auth, provider);
   };
 
@@ -108,36 +118,28 @@ export default function HomePage() {
     );
   }
 
-  // If not loading and no user, show the login page
-  if (!user) {
-    return (
-        <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
-            <CardHeader className="text-center">
-            <div className="mx-auto mb-6">
-                <Logo />
-            </div>
-            <CardTitle className="font-headline text-3xl tracking-tighter">
-                Welcome to Devils access
-            </CardTitle>
-            <CardDescription className="pt-1">
-                Sign in to access your dashboard.
-            </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-            <Button onClick={handleSignIn} disabled={isProcessing}>
-                Sign in with Google
-            </Button>
-            </CardContent>
-        </Card>
-        </div>
-    );
-  }
-
-  // Fallback for when user is loaded but redirect hasn't happened yet
+  // If not loading and no user, show the login page.
+  // The useEffect has already determined there's no redirect result to process.
   return (
-     <div className="flex min-h-screen items-center justify-center bg-background">
-        <p>Redirecting to dashboard...</p>
+      <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
+          <CardHeader className="text-center">
+          <div className="mx-auto mb-6">
+              <Logo />
+          </div>
+          <CardTitle className="font-headline text-3xl tracking-tighter">
+              Welcome to Devils access
+          </CardTitle>
+          <CardDescription className="pt-1">
+              Sign in to access your dashboard.
+          </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+          <Button onClick={handleSignIn} disabled={isProcessing}>
+              Sign in with Google
+          </Button>
+          </CardContent>
+      </Card>
       </div>
   );
 }
