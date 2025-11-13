@@ -21,46 +21,42 @@ export default function HomePage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const [isProcessing, setIsProcessing] = useState(true);
+  const [isProcessingLogin, setIsProcessingLogin] = useState(true);
 
-  // This effect handles the result from a redirect sign-in flow
+  // Effect 1: Handle user redirection
   useEffect(() => {
-    // If a user is already logged in from a previous session, redirect them.
-    if (user) {
+    // If loading is finished and we have a user, go to the dashboard.
+    if (!isUserLoading && user) {
       router.push('/dashboard');
+    }
+    // If loading is finished and there's no user, stop the loading spinner
+    // on this page so the login button can be shown.
+    if (!isUserLoading && !user) {
+        setIsProcessingLogin(false);
+    }
+  }, [user, isUserLoading, router]);
+
+  // Effect 2: Handle the result from a redirect sign-in flow
+  useEffect(() => {
+    if (!auth) {
       return;
     }
     
-    // If there's no auth instance yet, we can't do anything.
-    if (!auth) {
-       // Set processing to false so the login button can be shown.
-       if(isUserLoading === false) {
-          setIsProcessing(false);
-       }
-      return;
-    }
-
-    // This is the core logic for the redirect flow.
-    // getRedirectResult() returns a promise that resolves with the user credential
-    // if the user has just signed in via redirect, or null otherwise.
+    // This part only runs on the initial page load after a redirect from Google.
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
-          // User has successfully signed in.
+          // User has successfully signed in via redirect.
+          // The `onAuthStateChanged` listener will pick up the user,
+          // and Effect 1 will handle the redirection.
           toast({ title: "Signed In", description: "Successfully authenticated."});
           await createUserProfile(result.user);
-          // Force token refresh to get custom claims if they exist
-          await result.user.getIdToken(true); 
-          // The user object will be updated by the onAuthStateChanged listener,
-          // which will trigger the effect again and redirect.
-          // Explicitly redirect here to ensure navigation happens.
-          router.push('/dashboard');
         } else {
-          // No redirect result, meaning this is a fresh visit or the user is already logged out.
-          // If the auth state is no longer loading and there's no user, we can stop processing.
-          if (!isUserLoading && !user) {
-            setIsProcessing(false);
-          }
+            // No redirect result, which is normal on a fresh visit.
+            // We can signal that we're done processing the potential login.
+            if(!user) { // only stop spinner if we are sure there is no user
+                setIsProcessingLogin(false);
+            }
         }
       })
       .catch((error) => {
@@ -70,16 +66,14 @@ export default function HomePage() {
           title: "Sign-in Failed",
           description: error.message || "An error occurred during sign-in.",
         });
-        setIsProcessing(false);
+        setIsProcessingLogin(false);
       });
-  // This dependency array is critical. It runs when auth is available and when the user loading state changes.
-  // We don't include `user` because that could cause loops.
+  // We only want this to run when the auth service is available.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth, isUserLoading, router]);
+  }, [auth]);
 
 
   const createUserProfile = async (user: User) => {
-    // Ensure you get the firestore instance correctly.
     if (!auth) return;
     const firestore = getFirestore(auth.app);
     const userDocRef = doc(firestore, 'users', user.uid);
@@ -110,25 +104,29 @@ export default function HomePage() {
       toast({ variant: 'destructive', title: 'Authentication service not ready' });
       return;
     }
-    setIsProcessing(true);
+    setIsProcessingLogin(true);
     const provider = new GoogleAuthProvider();
-
-    // Use signInWithRedirect. This is the most reliable method for all environments,
-    // as it avoids popup blockers and iframe issues in production.
     await signInWithRedirect(auth, provider);
   };
 
 
-  if (isUserLoading || isProcessing) {
+  if (isUserLoading || isProcessingLogin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p>Loading...</p>
       </div>
     );
   }
+  
+  if (user) {
+    return (
+       <div className="flex min-h-screen items-center justify-center bg-background">
+        <p>Redirecting to dashboard...</p>
+      </div>
+    )
+  }
 
-  // If not loading and no user, show the login page.
-  // The useEffect has already determined there's no redirect result to process.
+
   return (
       <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
@@ -144,7 +142,7 @@ export default function HomePage() {
           </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-          <Button onClick={handleSignIn} disabled={isProcessing}>
+          <Button onClick={handleSignIn} disabled={isProcessingLogin}>
               Sign in with Google
           </Button>
           </CardContent>
