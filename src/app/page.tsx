@@ -24,24 +24,37 @@ export default function HomePage() {
   const { toast } = useToast();
   const [isProcessingRedirect, setIsProcessingRedirect] = useState(true);
 
+  // Effect 1: Redirect already logged-in users
   useEffect(() => {
-    if (!isUserLoading && user) {
+    // If auth is still loading, do nothing.
+    if (isUserLoading) return;
+    
+    // If loading is finished and we have a user, redirect.
+    if (user) {
       router.push('/dashboard');
     }
   }, [user, isUserLoading, router]);
 
+  // Effect 2: Handle the result of a sign-in redirect
   useEffect(() => {
+    // If auth service isn't ready, we can't process the result.
     if (!auth) {
-      setIsProcessingRedirect(false);
+      setIsProcessingRedirect(false); // Stop processing if auth is not available
       return;
     }
 
+    // This is the core logic to handle the result from Google Sign-In
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
+          // User has just signed in.
           toast({ title: "Signed In", description: "Successfully authenticated." });
+          // Create a user profile in Firestore if it doesn't exist.
           await createUserProfile(result.user);
+          // The user object will be picked up by the useUser() hook,
+          // and Effect 1 will handle the redirect.
         }
+        // Whether there was a result or not, we are done processing.
         setIsProcessingRedirect(false);
       })
       .catch((error) => {
@@ -53,6 +66,7 @@ export default function HomePage() {
         });
         setIsProcessingRedirect(false);
       });
+  // The 'auth' and 'toast' dependencies are stable. We only want this to run once on mount.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth]);
 
@@ -89,14 +103,17 @@ export default function HomePage() {
       return;
     }
     try {
+        // This is CRITICAL: It tells Firebase to remember the user across browser sessions.
         await setPersistence(auth, browserLocalPersistence);
         const provider = new GoogleAuthProvider();
+        // Start the sign-in process. The user will be redirected to Google and then back.
         await signInWithRedirect(auth, provider);
     } catch(error: any) {
          toast({ variant: 'destructive', title: 'Sign in failed', description: error.message });
     }
   };
-
+  
+  // While we are checking auth state or processing the redirect, show a loading screen.
   if (isUserLoading || isProcessingRedirect) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -105,6 +122,8 @@ export default function HomePage() {
     );
   }
   
+  // If user is already logged in, they will be redirected by Effect 1. 
+  // This message is a fallback.
   if (user) {
     return (
        <div className="flex min-h-screen items-center justify-center bg-background">
@@ -113,6 +132,7 @@ export default function HomePage() {
     )
   }
 
+  // If no user and not loading, show the sign-in page.
   return (
       <div className="flex min-h-screen animate-fade-in items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/10">
