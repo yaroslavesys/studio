@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithPopup, User, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, User, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { useAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,7 +24,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const [status, setStatus] = useState<'loading' | 'signingIn' | 'redirecting' | 'idle'>('loading');
 
-  // Effect 1: Handle user state changes and initial loading
+  // Effect 1: Handle user state changes and initial redirect
   useEffect(() => {
     console.log(`[HomePage] User State Effect. isUserLoading: ${isUserLoading}, user: ${user?.email}`);
     if (isUserLoading) {
@@ -36,10 +36,30 @@ export default function HomePage() {
       setStatus('redirecting');
       router.push('/dashboard');
     } else {
-      console.log('[HomePage] No user found after load. Status set to idle.');
-      setStatus('idle');
+       // If no user, check for redirect result
+       if (!auth) return;
+       setStatus('loading'); // Show loading while we check for redirect
+       getRedirectResult(auth)
+        .then(async (result) => {
+            if (result) {
+                // This is the returning user from Google.
+                console.log('[HomePage] Redirect result found. User:', result.user.email);
+                setStatus('signingIn');
+                toast({ title: "Signed In", description: "Успешная аутентификация. Создание профиля..." });
+                await createUserProfile(result.user);
+                // The main user effect will catch the new user and redirect to dashboard
+            } else {
+                // No user and no redirect result, so it's a fresh visit.
+                console.log('[HomePage] No user and no redirect result. Status set to idle.');
+                setStatus('idle');
+            }
+        }).catch(error => {
+            console.error('[HomePage] Redirect Result Error:', error);
+            toast({ variant: 'destructive', title: 'Ошибка входа', description: error.message });
+            setStatus('idle');
+        });
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, router, auth, toast]);
 
   const createUserProfile = async (user: User) => {
     if (!auth) return;
@@ -91,36 +111,22 @@ export default function HomePage() {
       toast({ variant: 'destructive', title: 'Сервис аутентификации не готов' });
       return;
     }
-    console.log('[handleSignIn] Starting popup sign-in process...');
+    console.log('[handleSignIn] Starting redirect sign-in process...');
     setStatus('signingIn');
     
     try {
       await setPersistence(auth, browserLocalPersistence);
       const provider = new GoogleAuthProvider();
-      
-      console.log('[handleSignIn] Calling signInWithPopup...');
-      const result = await signInWithPopup(auth, provider);
-      console.log('[handleSignIn] signInWithPopup SUCCESS. User:', result.user.email);
-      
-      toast({ title: "Signed In", description: "Успешная аутентификация. Создание профиля..." });
-      await createUserProfile(result.user);
-      // The useEffect will catch the user change and redirect.
-      
+      await signInWithRedirect(auth, provider);
+      // The page will redirect to Google, and the result will be handled by useEffect on return.
     } catch (error: any) {
        console.error('[handleSignIn] Error:', error);
-       // Handle common popup errors
-       if (error.code === 'auth/popup-closed-by-user') {
-            toast({ variant: 'default', title: 'Вход отменён', description: 'Вы закрыли окно входа.' });
-       } else if (error.code === 'auth/popup-blocked') {
-            toast({ variant: 'destructive', title: 'Окно заблокировано', description: 'Ваш браузер заблокировал всплывающее окно. Пожалуйста, разрешите их для этого сайта.' });
-       } else {
-            toast({ variant: 'destructive', title: 'Sign in failed', description: error.message });
-       }
+       toast({ variant: 'destructive', title: 'Sign in failed', description: error.message });
        setStatus('idle');
     }
   };
   
-  if (status === 'loading' || status === 'redirecting') {
+  if (status === 'loading' || status === 'redirecting' || status === 'signingIn') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p>{status === 'redirecting' ? 'Перенаправление на дашборд...' : 'Загрузка...'}</p>
@@ -144,7 +150,7 @@ export default function HomePage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
           <Button onClick={handleSignIn} disabled={status === 'signingIn'}>
-             {status === 'signingIn' ? 'Ожидание входа...' : 'Войти с помощью Google'}
+             {status === 'signingIn' ? 'Перенаправление...' : 'Войти с помощью Google'}
           </Button>
           </CardContent>
       </Card>
