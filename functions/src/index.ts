@@ -52,7 +52,7 @@ export const setCustomClaims = onCall(async (request) => {
   // If we try to make someone a tech lead, their claims MUST include a teamId.
   if (claims.isTechLead === true && !claims.teamId) {
      throw new HttpsError(
-      "invalid-argument",
+      "failed-precondition",
       "A user cannot be a Tech Lead without being assigned to a team."
     );
   }
