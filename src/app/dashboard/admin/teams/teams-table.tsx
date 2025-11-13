@@ -351,52 +351,58 @@ export function TeamsTable() {
   };
 
   const handleDeleteRequest = (team: Team) => {
-    setTeamToDelete(team);
+    setTeamToDelete(contact);
   };
 
 
   const handleDelete = async (teamToDelete: Team) => {
-    if (!firestore || !teams || !functions) return;
-    const batch = writeBatch(firestore);
-    const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
-    
+    if (!firestore || !functions) return;
+
     try {
-      // 1. Delete the team
-      const teamDocRef = doc(firestore, 'teams', teamToDelete.id);
-      batch.delete(teamDocRef);
+        const batch = writeBatch(firestore);
 
-      // 2. If the team had a tech lead, handle their demotion.
-      const techLeadId = teamToDelete.techLeadId;
-      if (techLeadId) {
-        const techLeadUser = usersData?.find(u => u.uid === techLeadId);
-        if (techLeadUser) {
-           await setCustomClaims({ 
-             uid: techLeadId, 
-             claims: { 
-               isTechLead: false, 
-               teamId: null, 
-               isAdmin: !!techLeadUser.isAdmin 
-              } 
-            });
+        // 1. Delete the team document itself
+        const teamDocRef = doc(firestore, 'teams', teamToDelete.id);
+        batch.delete(teamDocRef);
+
+        // 2. If the team had a tech lead, demote them by updating their claims.
+        const techLeadId = teamToDelete.techLeadId;
+        if (techLeadId) {
+            console.log(`Team has tech lead ${techLeadId}. Preparing to demote.`);
+            const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
+            const techLeadUser = usersData?.find(u => u.uid === techLeadId);
+            
+            // We must call the claims function to ensure the user's document and auth state are both updated.
+            // We pass their current isAdmin status to avoid accidentally removing it.
+            if (techLeadUser) {
+                 await setCustomClaims({ 
+                    uid: techLeadId, 
+                    claims: { 
+                        isTechLead: false, 
+                        teamId: null, 
+                        isAdmin: !!techLeadUser.isAdmin 
+                    } 
+                });
+            }
         }
-      }
-      
-      // TODO: Find all users in this team and unassign them. This is a more complex operation.
-      // For now, users will remain in the team until reassigned manually. A Cloud Function trigger would be better for this.
-      
-      // 4. Commit the batch
-      await batch.commit();
+        
+        // TODO: In a real-world app, you'd also want to find all users in this team
+        // and set their `teamId` to null. This requires a query and would be best
+        // handled in a Cloud Function trigger for atomicity (onDelete of a team).
+        // For this UI, we will just delete the team and handle the tech lead.
 
-      toast({ title: 'Team Deleted', description: `The ${teamToDelete.name} team has been deleted.` });
+        await batch.commit();
+
+        toast({ title: 'Team Deleted', description: `The ${teamToDelete.name} team has been deleted.` });
     } catch (error: any) {
-       console.error("Error deleting team:", error);
+        console.error("Error deleting team:", error);
         toast({
             variant: "destructive",
             title: 'Delete Failed',
-            description: error.message || 'Could not delete team.',
+            description: error.message || 'Could not delete the team and handle tech lead demotion.',
         });
     }
-  };
+};
 
   const isLoading = isLoadingTeams || isLoadingUsers || isLoadingServices;
   const error = teamsError || usersError || servicesError;

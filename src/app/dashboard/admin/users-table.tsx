@@ -365,7 +365,7 @@ export function UsersTable() {
           <DialogHeader>
             <DialogTitle>Edit {selectedUser?.displayName}</DialogTitle>
             <DialogDescription>
-              Modify user roles and team assignment. Roles will apply on the user's next login.
+              Modify user roles and team assignment. Changes will apply on the user's next login.
             </DialogDescription>
           </DialogHeader>
           {selectedUser && teams && (
