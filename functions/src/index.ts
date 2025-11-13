@@ -48,7 +48,8 @@ export const setCustomClaims = onCall(async (request) => {
   }
 
   // **CRITICAL VALIDATION LOGIC**
-  // A tech lead MUST be assigned to a team.
+  // A tech lead MUST be assigned to a team if they are being made a tech lead.
+  // This check prevents falling into an invalid state.
   if (claims.isTechLead === true && !claims.teamId) {
      throw new HttpsError(
       "failed-precondition",
@@ -79,6 +80,7 @@ export const setCustomClaims = onCall(async (request) => {
       uid: uid,
       error: error.message,
     });
+    // Throw a generic internal error to avoid leaking implementation details.
     throw new HttpsError(
       "internal",
       "An error occurred while trying to set user claims."
